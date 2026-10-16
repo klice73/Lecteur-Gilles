@@ -34,6 +34,7 @@ class MainActivity : Activity() {
     private var engine: OfflineTts? = null // Access only on worker
     private lateinit var audioManager: AudioManager
     private lateinit var focus: AudioFocusRequest
+    private fun dp(value:Int)=(value*resources.displayMetrics.density).toInt()
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -42,17 +43,17 @@ class MainActivity : Activity() {
         focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             .setOnAudioFocusChangeListener { change -> if(change < 0) runOnUiThread { pauseReading() } }.build()
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20,20,20,16); setBackgroundColor(0xffeef4f3.toInt()) }
-        layout.setOnApplyWindowInsetsListener { v, insets -> v.setPadding(20,20+insets.systemWindowInsetTop,20,16+insets.systemWindowInsetBottom); insets }
+        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16),dp(16),dp(16),dp(12)); setBackgroundColor(0xffeef4f3.toInt()) }
+        layout.setOnApplyWindowInsetsListener { v, insets -> v.setPadding(dp(16),dp(16)+insets.systemWindowInsetTop,dp(16),dp(12)+insets.systemWindowInsetBottom); insets }
         val title = TextView(this).apply { text = "Lecteur Gilles"; textSize = 26f; setTextColor(0xff145c54.toInt()) }
         layout.addView(title)
         layout.addView(TextView(this).apply { text = "Voix française • hors connexion • sans quota"; textSize = 14f })
         val tools = LinearLayout(this)
-        tools.addView(button("Ouvrir un document") { openDocument() }, LinearLayout.LayoutParams(0,56,1f))
+        tools.addView(button("Ouvrir un document") { openDocument() }, LinearLayout.LayoutParams(0,dp(56),1f))
         tools.addView(button("Coller") {
             val clip = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
             clip.primaryClip?.getItemAt(0)?.coerceToText(this)?.let { stopReading(); editor.setText(it) }
-        }, LinearLayout.LayoutParams(0,56,0.5f))
+        }, LinearLayout.LayoutParams(0,dp(56),0.5f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
         layout.addView(speed)
@@ -67,8 +68,8 @@ class MainActivity : Activity() {
         val controls=LinearLayout(this)
         play=button("▶ Lire") { if(active && paused) resumeReading() else if(!active) startReading() }
         pause=button("Ⅱ Pause") {pauseReading()}.apply {isEnabled=false}
-        controls.addView(play,LinearLayout.LayoutParams(0,60,1f));controls.addView(pause,LinearLayout.LayoutParams(0,60,1f))
-        controls.addView(button("■ Arrêter") {stopReading()},LinearLayout.LayoutParams(0,60,1f))
+        controls.addView(play,LinearLayout.LayoutParams(0,dp(60),1f));controls.addView(pause,LinearLayout.LayoutParams(0,dp(60),1f))
+        controls.addView(button("■ Arrêter") {stopReading()},LinearLayout.LayoutParams(0,dp(60),1f))
         layout.addView(controls)
         status=TextView(this).apply {text="Prêt. La première préparation peut prendre un moment.";textSize=14f;setPadding(0,12,0,8)}
         layout.addView(status)
