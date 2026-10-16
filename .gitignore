@@ -1,0 +1,10 @@
+.gradle/
+**/build/
+local.properties
+.downloads/
+app/libs/
+app/src/main/assets/vits-piper-fr_FR-gilles-low/
+*.apk
+*.jks
+*.keystore
+.idea/

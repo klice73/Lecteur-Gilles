@@ -1,0 +1,43 @@
+name: Construire et publier APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Préparer la voix Gilles et le moteur natif
+        run: python prepare.py
+      - name: Compiler, tester et vérifier Android
+        run: gradle assembleDebug testDebugUnitTest lintDebug --no-daemon --console=plain
+      - name: Préparer APK installable
+        run: cp app/build/outputs/apk/debug/app-debug.apk Lecteur-Gilles-Android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lecteur-Gilles-Android
+          path: |
+            Lecteur-Gilles-Android.apk
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+      - name: Publier la version de test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="test-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" Lecteur-Gilles-Android.apk --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "APK de test signé : voix Gilles incluse, lecture locale. Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
