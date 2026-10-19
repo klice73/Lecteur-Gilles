@@ -48,7 +48,7 @@ jobs:
           script: |
             adb logcat -c || true
             gradle connectedDebugAndroidTest --no-daemon --console=plain || (adb logcat -d -t 3000 > logcat-echec.txt; exit 1)
-            adb pull /sdcard/Android/data/fr.lecteurgilles.android/files/screenshots android-screenshots
+            adb pull /sdcard/Android/data/fr.lecteurgilles.android/files/screenshots android-screenshots || echo "Captures absentes : l'application de test est desinstallee apres les tests."
       - name: Diagnostic lisible en cas d'échec du test émulé
         if: failure()
         run: |
@@ -58,8 +58,11 @@ jobs:
               texte = texte.replace('%', '%25').replace('\r', '').replace('\n', '%0A')[:1800]
               print('::error title=%s::%s' % (titre, texte))
           n = 0
-          for f in glob.glob('app/build/outputs/androidTest-results/**/*.xml', recursive=True):
+          fichiers = glob.glob('app/build/outputs/androidTest-results/**/*.xml', recursive=True)
+          cas_total = 0
+          for f in fichiers:
               for cas in ET.parse(f).getroot().iter('testcase'):
+                  cas_total += 1
                   for e in list(cas.findall('failure')) + list(cas.findall('error')):
                       n += 1
                       note('Test ' + cas.get('name', '?'), (e.get('message') or '') + '\n' + (e.text or '')[:1200])
@@ -69,8 +72,10 @@ jobs:
               note('Journal du telephone emule', '\n'.join(utiles[-40:]) or 'aucune ligne utile')
           except FileNotFoundError:
               note('Journal du telephone emule', 'absent : echec avant ou pendant le demarrage de l emulateur')
-          if not n:
+          if not fichiers:
               note('Resultats de test', 'aucun fichier de resultat : echec avant les tests (compilation, installation ou emulateur)')
+          elif not n:
+              note('Resultats de test', '%d tests emules executes, tous reussis : l echec vient d une autre commande de l etape' % cas_total)
           EOF
       - uses: actions/upload-artifact@v4
         if: always()
