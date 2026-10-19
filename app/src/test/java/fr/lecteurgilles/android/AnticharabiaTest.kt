@@ -19,8 +19,8 @@ class AnticharabiaTest {
     }
     @Test fun aucunMotPerdu() {
         val texte="Le chat dort. Oui. La pluie tombe doucement sur les toits de la vieille ville endormie. Fin."
-        val avant=Regex("(?U)\\w+").findAll(texte).map{it.value}.toList()
-        val apres=Regex("(?U)\\w+").findAll(Anticharabia.regrouper(texte).joinToString(" ")).map{it.value}.toList()
+        val avant=Regex("[\\p{L}\\p{M}\\p{Nd}]+").findAll(texte).map{it.value}.toList()
+        val apres=Regex("[\\p{L}\\p{M}\\p{Nd}]+").findAll(Anticharabia.regrouper(texte).joinToString(" ")).map{it.value}.toList()
         assertEquals(avant,apres)
     }
     @Test fun motsComposes() {

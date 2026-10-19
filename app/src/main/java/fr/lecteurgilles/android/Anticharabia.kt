@@ -17,13 +17,17 @@ import kotlin.math.sqrt
  */
 object Anticharabia {
     const val MOTS_MIN = 7
-    private val fin = Regex("(?U)(?<=[.!?…])[\"»”)\\]]*\\s+")
-    private val pointFinal = Regex("(?U)[.!?…]+([\"»”)\\]]*)$")
-    private val points = Regex("(?U)(?:\\s*[.…·_]){3,}\\s*")
-    private val titre = Regex("(?U)(?<=[^\\s.!?,;:…])[ \\t]*\\n[ \\t]*\\n\\s*")
-    private val mot = Regex("(?U)[^\\W\\d_]+(?:['’-][^\\W\\d_]+)*|\\d+")
-    private val lettre = Regex("(?U)[^\\W\\d_]")
-    private val chiffre = Regex("\\d")
+    // Pas de (?U) : Android (ICU) le refuse. Classes Unicode explicites,
+    // identiques sur Android et sur la JVM des tests unitaires.
+    private const val ESP = "[\\s\\u00a0\\u202f]"
+    private const val L = "[\\p{L}\\p{M}]"
+    private val fin = Regex("(?<=[.!?…])[\"»”)\\]]*$ESP+")
+    private val pointFinal = Regex("[.!?…]+([\"»”)\\]]*)$")
+    private val points = Regex("(?:$ESP*[.…·_]){3,}$ESP*")
+    private val titre = Regex("(?<=[^\\s\\u00a0.!?,;:…])[ \\t\\u00a0]*\\n[ \\t\\u00a0]*\\n$ESP*")
+    private val mot = Regex("$L+(?:['’-]$L+)*|\\p{Nd}+")
+    private val lettre = Regex(L)
+    private val chiffre = Regex("\\p{Nd}")
 
     fun mots(texte: String) = mot.findAll(texte).count()
     fun lettres(texte: String) = lettre.findAll(texte).count() + 3 * chiffre.findAll(texte).count()
