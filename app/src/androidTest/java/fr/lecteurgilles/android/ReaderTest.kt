@@ -103,7 +103,7 @@ class ReaderTest {
             val limite=System.currentTimeMillis()+180000
             var premier=-1
             while(System.currentTimeMillis()<limite && premier<0){Thread.sleep(100);scenario.onActivity{a->premier=field(a,"highlightStart") as Int}}
-            assertTrue("Reprise au mauvais endroit : $premier (attendu à partir de $avant)",premier>=avant)
+            assertEquals("La reprise doit commencer exactement à la phrase enregistrée",avant,premier)
             scenario.onActivity { a -> MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a) }
         }
     }
