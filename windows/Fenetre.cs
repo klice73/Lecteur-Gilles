@@ -10,7 +10,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 class Lecteur : Form {
-    TextBox texte = new TextBox();
+    RichTextBox texte = new RichTextBox();
+    int debutLecture, surligneDebut=-1, surligneLongueur;
+    bool changeSurlignage;
     Label statut = new Label();
     ComboBox vitesse = new ComboBox();
     Process travail;
@@ -77,7 +79,7 @@ class Lecteur : Form {
         outils.Controls.Add(new Label {Text="Voix",AutoSize=true,Margin=new Padding(4,10,10,0)});
         voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;voix.Items.AddRange(new object[]{"Gilles", "Siwis"});voix.SelectedIndex=0;outils.Controls.Add(voix);
         outils.Controls.Add(nettoyerPdf);
-        texte.Multiline=true; texte.ScrollBars=ScrollBars.Vertical; texte.Dock=DockStyle.Fill; texte.Font=new Font("Segoe UI",14); texte.AcceptsReturn=true;
+        texte.Multiline=true; texte.ScrollBars=RichTextBoxScrollBars.Vertical; texte.Dock=DockStyle.Fill; texte.Font=new Font("Segoe UI",14); texte.DetectUrls=false;
         texte.Text="Bonjour ! Bienvenue dans votre lecteur Piper.\r\n\r\nCollez votre texte ici, puis cliquez sur Lire."; grille.Controls.Add(texte,0,2);
         var actions=new FlowLayoutPanel {Dock=DockStyle.Fill, Padding=new Padding(0,10,0,0)}; grille.Controls.Add(actions,0,3);
         lire=Ajouter(actions,"▶ Lire tout",delegate { Continuer(); }); pause=Ajouter(actions,"Ⅱ Pause",delegate { Pauser(); });pause.Enabled=false; Ajouter(actions,"■ Arrêter",delegate { Arreter(); });
@@ -88,7 +90,7 @@ class Lecteur : Form {
         var aide=new ToolTip();aide.SetToolTip(lireCurseur,"Cliquez dans le texte. Si du texte est sélectionné, la lecture commence au début de la sélection et continue jusqu’à la fin du document.");
         statut.Dock=DockStyle.Fill; statut.Text="Ouvrez ou glissez un PDF, DOCX, EPUB, ODT, HTML ou fichier texte."; grille.Controls.Add(statut,0,4);
         texte.MaxLength=int.MaxValue;
-        texte.TextChanged+=delegate {if(audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}};
+        texte.TextChanged+=delegate {if(!changeSurlignage && audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}};
         voix.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Voix choisie : "+voix.Text+". Appliquée à la prochaine lecture.";};
         vitesse.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Vitesse modifiée. Appliquée à la prochaine lecture.";};
         AllowDrop=true;
@@ -101,7 +103,18 @@ class Lecteur : Form {
         var b=new Button {Text=nom,AutoSize=true,Height=36,Padding=new Padding(8,3,8,3)};
         b.Click+=delegate {try {action();} catch(Exception e) {MessageBox.Show(e.Message,"Piper");}}; parent.Controls.Add(b);return b;
     }
+    void Surligner(int debut,int longueur) {
+        changeSurlignage=true;
+        try {
+            if(surligneDebut>=0 && surligneDebut+surligneLongueur<=texte.TextLength) {texte.Select(surligneDebut,surligneLongueur);texte.SelectionBackColor=texte.BackColor;}
+            surligneDebut=debut;surligneLongueur=longueur;
+            if(debut>=0) {texte.Select(debut,longueur);texte.SelectionBackColor=Color.FromArgb(255,235,115);texte.Select(debut,0);texte.ScrollToCaret();}
+        } finally {changeSurlignage=false;}
+    }
     void Arreter() {
+        if(IsDisposed || texte.IsDisposed)return;
+        int position=texte.SelectionStart;int selection=texte.SelectionLength;
+        Surligner(-1,0);texte.Select(position,selection);
         lectureProgressive=false;
         if(travail!=null) { if(!travail.HasExited) {
             var kill=new ProcessStartInfo("taskkill.exe","/PID "+travail.Id+" /T /F") {UseShellExecute=false,CreateNoWindow=true};
@@ -137,7 +150,7 @@ class Lecteur : Form {
         if(string.IsNullOrWhiteSpace(texte.Text)) {MessageBox.Show("Collez ou saisissez un texte."); return;}
         string chemin=exportPath;
         if(sauver && chemin==null) using(var d=new SaveFileDialog {Filter="Audio WAV|*.wav",FileName="lecture.wav",DefaultExt="wav"}) {if(d.ShowDialog()!=DialogResult.OK)return; chemin=d.FileName;}
-        Arreter(); importation=false; destination=chemin; erreur="";
+        Arreter(); debutLecture=depart; importation=false; destination=chemin; erreur="";
         var donnees=new Dictionary<string,object>(); donnees["text"]=texte.Text.Substring(depart); donnees["speed"]=double.Parse((string)vitesse.SelectedItem,System.Globalization.CultureInfo.InvariantCulture);
         donnees["voice"]=voix.SelectedIndex==0?"fr_FR-gilles-low":"fr_FR-siwis-medium";
         File.WriteAllText(Path.Combine(temp,"request.json"),new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Serialize(donnees),new System.Text.UTF8Encoding(false));
@@ -199,14 +212,16 @@ class Lecteur : Form {
             if(audioOuvert) {
                 if(suspendu)return;
                 if(Audio("status "+alias+" mode")!="stopped")return;
-                FermerAudio();if(audioCourant!=null)File.Delete(audioCourant);audioCourant=null;
+                FermerAudio();if(audioCourant!=null) {File.Delete(audioCourant);File.Delete(Path.ChangeExtension(audioCourant,"json"));}audioCourant=null;
             }
             string prochain=Path.Combine(dossierLecture,"part-"+(passage+1).ToString("D6")+".wav");
             if(File.Exists(prochain)) {
                 passage++;audioCourant=prochain;LireAudio(prochain);
+                var limites=new JavaScriptSerializer().Deserialize<Dictionary<string,int>>(File.ReadAllText(Path.ChangeExtension(prochain,"json")));
+                Surligner(debutLecture+limites["start"],limites["end"]-limites["start"]);
                 statut.Text="Lecture du passage "+passage+". Le reste du livre se prépare progressivement.";
             } else if(travail==null && File.Exists(Path.Combine(dossierLecture,"done"))) {
-                lectureProgressive=false;texte.ReadOnly=false;vitesse.Enabled=true;voix.Enabled=true;statut.Text="Lecture terminée.";
+                lectureProgressive=false;Surligner(-1,0);texte.ReadOnly=false;vitesse.Enabled=true;voix.Enabled=true;statut.Text="Lecture terminée.";
             } else statut.Text="Préparation du passage "+(passage+1)+"… Arrêter permet d’annuler.";
         } catch(Exception e) {Arreter();statut.Text="Erreur de lecture : "+e.Message;}
     }
@@ -219,7 +234,7 @@ class Lecteur : Form {
                     string before="TABLE DES MATIÈRES. Préambule à ignorer.\r\n\r\n";
                     string body="Chapitre un. Bonjour, voici le passage choisi. La lecture continue sans modifier le document. ";
                     f.texte.Text=before+body+body+body;
-                    string original=f.texte.Text;int start=before.Length;
+                    string original=f.texte.Text;int start=original.IndexOf("Chapitre un.");
                     f.texte.Select(start,12);f.lireCurseur.PerformClick();
                     var req=new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(f.temp,"request.json")));
                     if((string)req["text"]!=original.Substring(start) || f.texte.Text!=original)throw new Exception("Texte transmis ou document incorrect");
@@ -227,9 +242,12 @@ class Lecteur : Form {
                     var until=DateTime.Now.AddSeconds(90);
                     while(!f.audioOuvert && DateTime.Now<until) {Application.DoEvents();System.Threading.Thread.Sleep(30);}
                     if(!f.audioOuvert)throw new Exception("Lecture depuis curseur non démarrée");
+                    if(f.surligneDebut!=start || f.surligneLongueur<=0 || f.texte.Text!=original)throw new Exception("Surlignage initial incorrect");
+                    int highlighted=f.surligneDebut;
+                    using(var image=new Bitmap(f.Width,f.Height)) {f.DrawToBitmap(image,new Rectangle(0,0,f.Width,f.Height));image.Save(Path.Combine(f.racine,"Apercu-surlignage.png"));}
                     System.Threading.Thread.Sleep(300);f.Pauser();int pos=int.Parse(f.Audio("status "+f.alias+" position"));
                     System.Threading.Thread.Sleep(400);
-                    if(int.Parse(f.Audio("status "+f.alias+" position"))!=pos)throw new Exception("Pause instable");
+                    if(int.Parse(f.Audio("status "+f.alias+" position"))!=pos || f.surligneDebut!=highlighted)throw new Exception("Pause ou surlignage instable");
                     f.Continuer();System.Threading.Thread.Sleep(400);
                     if(int.Parse(f.Audio("status "+f.alias+" position"))<=pos)throw new Exception("Reprise immobile");
                     f.Arreter();f.texte.Select(original.Length,0);f.LireDepuisCurseur();
@@ -243,7 +261,7 @@ class Lecteur : Form {
                     f.Arreter();
                     f.texte.Select(start,0);f.statut.Text="Cliquez dans le texte, puis sur Lire à partir du curseur. Une sélection commence à son début.";
                     using(var image=new Bitmap(f.Width,f.Height)) {f.DrawToBitmap(image,new Rectangle(0,0,f.Width,f.Height));image.Save(Path.Combine(f.racine,"Apercu-1.2.png"));}
-                    File.WriteAllText(Path.Combine(f.racine,"verification-curseur.txt"),"Réussi : préambule exclu de la requête moteur ; sélection et curseur ; texte intact ; synthèse réelle ; pause et reprise ; fin du texte ; lecture complète ; temporaires locaux. "+DateTime.Now.ToString("s"));
+                    File.WriteAllText(Path.Combine(f.racine,"verification-curseur.txt"),"Réussi : préambule exclu de la requête moteur ; sélection et curseur ; texte intact ; synthèse réelle ; pause et reprise ; fin du texte ; lecture complète ; surlignage synchronisé ; temporaires locaux. "+DateTime.Now.ToString("s"));
                     f.Close();
                 } catch(Exception e) {File.WriteAllText(Path.Combine(f.racine,"verification-curseur-erreur.txt"),e.ToString());Environment.ExitCode=1;}
                 finally {f.Arreter();}
@@ -271,8 +289,8 @@ class Lecteur : Form {
                 f.Audio("seek "+f.alias+" to end");f.Audio("play "+f.alias);
                 deadline=DateTime.Now.AddSeconds(90);
                 while(f.passage<2 && DateTime.Now<deadline){Application.DoEvents();System.Threading.Thread.Sleep(30);}
-                if(f.passage<2 || File.Exists(Path.Combine(f.dossierLecture,"part-000001.wav")))throw new Exception("Enchaînement ou suppression en échec");
-                f.Arreter();if(f.travail!=null || f.audioOuvert || f.texte.ReadOnly)throw new Exception("Arrêt en échec");
+                if(f.passage<2 || f.surligneDebut<=0 || File.Exists(Path.Combine(f.dossierLecture,"part-000001.wav")))throw new Exception("Enchaînement ou suppression en échec");
+                f.Arreter();if(f.travail!=null || f.audioOuvert || f.texte.ReadOnly || f.surligneDebut!=-1)throw new Exception("Arrêt en échec");
                 File.WriteAllText(Path.Combine(f.racine,"verification-long.txt"),"Réussi : import PDF 300 pages ("+f.texte.Text.Length+" caractères), lecture progressive réelle avec Gilles, pause stable, reprise, file audio bornée à 3 passages, enchaînement et suppression du passage lu, arrêt. "+DateTime.Now.ToString("s"));
                 f.Close();
                 } catch(Exception e) {File.WriteAllText(Path.Combine(f.racine,"verification-long-erreur.txt"),e.ToString());Environment.ExitCode=1;}

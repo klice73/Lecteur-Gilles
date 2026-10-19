@@ -36,24 +36,35 @@ class ReaderTest {
             scenario.onActivity { a -> (field(a,"pause") as Button).performClick() }
             Thread.sleep(250)
             var first=0
+            var marked=-1
             scenario.onActivity { a ->
                 assertTrue(field(a,"paused") as Boolean)
-                assertEquals("â–¶ Continuer",(field(a,"play") as Button).text.toString())
+                assertEquals("▶ Continuer",(field(a,"play") as Button).text.toString())
                 first=(field(a,"track") as AudioTrack).playbackHeadPosition
+                marked=field(a,"highlightStart") as Int
+                assertTrue("Le passage lu n’est pas surligné",marked>=if(fromCursor) prefix.length else 0)
+                assertEquals(original,(field(a,"editor") as EditText).text.toString())
             }
+            val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            val image=instrumentation.uiAutomation.takeScreenshot()
+            val dir=java.io.File(instrumentation.targetContext.getExternalFilesDir(null),"screenshots").apply{mkdirs()}
+            java.io.File(dir,if(fromCursor) "lecture-curseur.png" else "lecture-complete.png").outputStream().use{image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
+            image.recycle()
             Thread.sleep(500)
-            scenario.onActivity { a ->assertEquals("La pause avance",first,(field(a,"track") as AudioTrack).playbackHeadPosition);(field(a,"play") as Button).performClick() }
+            scenario.onActivity { a ->assertEquals("Le surlignage bouge pendant la pause",marked,field(a,"highlightStart") as Int);assertEquals("La pause avance",first,(field(a,"track") as AudioTrack).playbackHeadPosition);(field(a,"play") as Button).performClick() }
             Thread.sleep(500)
             scenario.onActivity { a ->
                 assertTrue("La reprise n'avance pas",(field(a,"track") as AudioTrack).playbackHeadPosition>first)
                 MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a)
                 assertFalse(field(a,"active") as Boolean)
+                assertEquals(-1,field(a,"highlightStart") as Int)
                 val editor=field(a,"editor") as EditText
                 assertTrue(editor.isEnabled)
                 assertEquals(original,editor.text.toString())
                 editor.setSelection(editor.text.length)
                 (field(a,"playFromCursor") as Button).performClick()
                 assertFalse(field(a,"active") as Boolean)
+                assertEquals(-1,field(a,"highlightStart") as Int)
                 assertTrue((field(a,"status") as android.widget.TextView).text.contains("fin du texte"))
             }
         }

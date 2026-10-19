@@ -23,3 +23,5 @@ Le venv référence le Python de base : **ne déplacez pas simplement un environ
 Cliquez dans le texte puis sur « Lire à partir du curseur » pour commencer à cet endroit. Une sélection commence à son début, puis la lecture continue jusqu’à la fin. « Lire tout » recommence depuis le début ; « Continuer » reprend une lecture en pause. Le texte affiché n’est pas tronqué.
 
 Validation exécutée sur la version locale : compilation C#, lecture réelle depuis curseur/sélection, exclusion du préambule dans la requête, document intact, pause/reprise, fin de texte et lecture complète ; import et lecture progressive du PDF synthétique de 300 pages. La réinstallation intégrale depuis Internet et la reconstruction de toutes les bibliothèques natives restent à vérifier séparément (voir legal/AUDIT.md).
+
+Le surlignage jaune suit le passage audio joué ; il reste fixe en pause, avance au passage suivant et disparaît à l’arrêt ou en fin de lecture. Le texte est conservé.

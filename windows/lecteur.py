@@ -1,4 +1,4 @@
-"""Lecteur local Piper. Interface et moteur isolés pour permettre l'arrêt."""
+"""Lecteur local Piper. Interface et moteur isolÃ©s pour permettre l'arrÃªt."""
 from pathlib import Path
 import json
 import os
@@ -24,6 +24,16 @@ def text_parts(text, limit=800):
         yield text[offset:end]
         offset = end
 
+def indexed_parts(text):
+    """Offsets use UTF-16 code units, matching Windows controls (including emoji)."""
+    offset = 0
+    for part in text_parts(text):
+        size = len(part.encode('utf-16-le', errors='surrogatepass')) // 2
+        if part.strip():
+            yield offset, offset + size, part
+        offset += size
+
+
 ROOT = Path(__file__).resolve().parent
 VOICE = ROOT / 'voix' / 'fr_FR-siwis-medium.onnx'
 os.environ['TCL_LIBRARY'] = str(ROOT / 'tcl' / 'tcl8.6')
@@ -43,13 +53,14 @@ def synthesize(request, output, streaming=False):
         folder = Path(output)
         folder.mkdir(parents=True, exist_ok=True)
         count = 0
-        for count, part in enumerate(parts, 1):
+        for count, (start, end, part) in enumerate(indexed_parts(data['text']), 1):
             # At most three ready audio passages, even while the listener pauses.
             while sum(1 for _ in folder.glob('part-*.wav')) >= 3:
                 time.sleep(0.1)
             pending = folder / 'preparation.tmp'
             with wave.open(str(pending), 'wb') as audio:
                 voice.synthesize_wav(part, audio, syn_config=config)
+            (folder / ('part-%06d.json' % count)).write_text(json.dumps({'start': start, 'end': end}), encoding='utf-8')
             pending.replace(folder / ('part-%06d.wav' % count))
         (folder / 'done').write_text(str(count), encoding='ascii')
     else:
@@ -78,7 +89,7 @@ def main():
     import time
 
     app = tk.Tk()
-    app.title('Piper — Lecture naturelle')
+    app.title('Piper â€” Lecture naturelle')
     app.geometry('920x680')
     app.minsize(700, 480)
     app.configure(bg='#eef3f7')
@@ -88,20 +99,20 @@ def main():
     style.configure('TLabel', font=('Segoe UI', 11), background='#eef3f7')
     box = ttk.Frame(app, padding=20)
     box.pack(fill='both', expand=True)
-    ttk.Label(box, text='Votre texte, à voix haute', font=('Segoe UI', 23, 'bold')).pack(anchor='w')
-    ttk.Label(box, text='Voix française Siwis • lecture locale • sans quota').pack(anchor='w', pady=(4, 16))
+    ttk.Label(box, text='Votre texte, Ã  voix haute', font=('Segoe UI', 23, 'bold')).pack(anchor='w')
+    ttk.Label(box, text='Voix franÃ§aise Siwis â€¢ lecture locale â€¢ sans quota').pack(anchor='w', pady=(4, 16))
     bar = ttk.Frame(box)
     bar.pack(fill='x', pady=(0, 10))
     editor = ScrolledText(box, wrap='word', undo=True, font=('Segoe UI', 14),
                           padx=16, pady=16, relief='flat', height=16)
     editor.pack(fill='both', expand=True)
     editor.insert('1.0', 'Bonjour ! Bienvenue dans votre lecteur Piper.\n\nCollez votre texte ici, puis cliquez sur Lire. La voix est produite sur votre ordinateur, sans envoyer votre texte sur Internet.')
-    status = tk.StringVar(value='Prêt. Collez un texte ou ouvrez un fichier .txt.')
+    status = tk.StringVar(value='PrÃªt. Collez un texte ou ouvrez un fichier .txt.')
     speed = tk.StringVar(value='1.0')
     controls = ttk.Frame(box)
     controls.pack(fill='x', pady=14)
     ttk.Label(box, textvariable=status, wraplength=820).pack(anchor='w')
-    ttk.Label(box, text='Les PDF et documents Word : copiez leur texte dans cette fenêtre.',
+    ttk.Label(box, text='Les PDF et documents Word : copiez leur texte dans cette fenÃªtre.',
               font=('Segoe UI', 9)).pack(anchor='w', pady=(9, 0))
     temp = tempfile.TemporaryDirectory(prefix='lecteur-piper-')
     scratch = Path(temp.name)
@@ -121,18 +132,18 @@ def main():
         winsound.PlaySound(None, 0)
         state['playing_until'] = 0
         editor.configure(state='normal')
-        status.set('Arrêté. Vous pouvez modifier le texte.')
+        status.set('ArrÃªtÃ©. Vous pouvez modifier le texte.')
 
     def paste():
         try:
             content = app.clipboard_get()
         except tk.TclError:
-            messagebox.showinfo('Presse-papiers', 'Aucun texte à coller.')
+            messagebox.showinfo('Presse-papiers', 'Aucun texte Ã  coller.')
             return
         stop()
         editor.delete('1.0', 'end')
         editor.insert('1.0', content)
-        status.set('Texte collé. Cliquez sur Lire.')
+        status.set('Texte collÃ©. Cliquez sur Lire.')
 
     def open_text():
         filename = filedialog.askopenfilename(filetypes=[('Texte', '*.txt'), ('Tous les fichiers', '*.*')])
@@ -155,10 +166,10 @@ def main():
     def start(action):
         content = editor.get('1.0', 'end-1c').strip()
         if not content:
-            messagebox.showinfo('Texte vide', 'Collez ou saisissez un texte à lire.')
+            messagebox.showinfo('Texte vide', 'Collez ou saisissez un texte Ã  lire.')
             return
         if not VOICE.is_file():
-            messagebox.showerror('Voix manquante', 'Le modèle français est absent du dossier voix.')
+            messagebox.showerror('Voix manquante', 'Le modÃ¨le franÃ§ais est absent du dossier voix.')
             return
         destination = None
         if action == 'save':
@@ -179,10 +190,10 @@ def main():
                 stdout=state['log'], stderr=state['log'], creationflags=subprocess.CREATE_NO_WINDOW)
         except Exception as error:
             stop()
-            messagebox.showerror('Démarrage impossible', str(error))
+            messagebox.showerror('DÃ©marrage impossible', str(error))
             return
         editor.configure(state='disabled')
-        status.set('Préparation de la voix… Le texte reste visible. Arrêter permet d’annuler.')
+        status.set('PrÃ©paration de la voixâ€¦ Le texte reste visible. ArrÃªter permet dâ€™annuler.')
 
     def poll():
         process = state['process']
@@ -194,7 +205,7 @@ def main():
             editor.configure(state='normal')
             if code:
                 details = (scratch / 'error.log').read_text(encoding='utf-8', errors='replace')
-                status.set('La génération a échoué.')
+                status.set('La gÃ©nÃ©ration a Ã©chouÃ©.')
                 messagebox.showerror('Erreur Piper', details[-2500:])
             else:
                 try:
@@ -208,22 +219,22 @@ def main():
                             os.replace(staging, target)
                         finally:
                             Path(staging).unlink(missing_ok=True)
-                        status.set('Audio enregistré : ' + str(target))
+                        status.set('Audio enregistrÃ© : ' + str(target))
                     else:
                         with wave.open(str(audio), 'rb') as wav:
                             duration = wav.getnframes() / wav.getframerate()
                         winsound.PlaySound(str(audio), winsound.SND_FILENAME | winsound.SND_ASYNC)
                         state['playing_until'] = time.monotonic() + duration
-                        status.set('Lecture en cours — cliquez sur Arrêter pour interrompre.')
+                        status.set('Lecture en cours â€” cliquez sur ArrÃªter pour interrompre.')
                 except Exception as error:
-                    status.set('Erreur de lecture ou d’enregistrement.')
+                    status.set('Erreur de lecture ou dâ€™enregistrement.')
                     messagebox.showerror('Audio', str(error))
         elif process is not None:
             elapsed = int(time.monotonic() - state['started'])
-            status.set('Préparation de la voix : {} s. Un texte long demande plus de temps.'.format(elapsed))
+            status.set('PrÃ©paration de la voix : {} s. Un texte long demande plus de temps.'.format(elapsed))
         if state['playing_until'] and time.monotonic() >= state['playing_until']:
             state['playing_until'] = 0
-            status.set('Lecture terminée.')
+            status.set('Lecture terminÃ©e.')
         app.after(200, poll)
 
     def close():
@@ -236,8 +247,8 @@ def main():
     ttk.Label(bar, text='Vitesse :').pack(side='left', padx=(20, 6))
     ttk.Combobox(bar, textvariable=speed, values=['0.75', '0.9', '1.0', '1.1', '1.25', '1.5'],
                  width=6, state='readonly').pack(side='left')
-    ttk.Button(controls, text='▶ Lire', command=lambda: start('play')).pack(side='left', padx=(0, 8))
-    ttk.Button(controls, text='■ Arrêter', command=stop).pack(side='left', padx=(0, 8))
+    ttk.Button(controls, text='â–¶ Lire', command=lambda: start('play')).pack(side='left', padx=(0, 8))
+    ttk.Button(controls, text='â–  ArrÃªter', command=stop).pack(side='left', padx=(0, 8))
     ttk.Button(controls, text='Enregistrer en WAV', command=lambda: start('save')).pack(side='left')
     app.protocol('WM_DELETE_WINDOW', close)
     app.after(200, poll)

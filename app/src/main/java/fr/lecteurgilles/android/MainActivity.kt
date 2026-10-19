@@ -6,6 +6,11 @@ import android.content.Intent
 import android.media.*
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.Spanned
+import android.text.style.BackgroundColorSpan
+import java.util.concurrent.ConcurrentLinkedQueue
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
@@ -20,6 +25,41 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipInputStream
 
 class MainActivity : Activity() {
+    private data class SpokenSpan(val id:Int,val firstFrame:Long,val lastFrame:Long,val start:Int,val end:Int)
+    private val spokenSpans=ConcurrentLinkedQueue<SpokenSpan>()
+    private val highlightHandler=Handler(Looper.getMainLooper())
+    private var highlight:BackgroundColorSpan?=null
+    private var highlightStart=-1
+    private val highlightTick=object:Runnable {
+        override fun run(){
+            if(destroyed)return
+            if(active && !paused) {
+                val frame=track?.playbackHeadPosition?.toLong()?.and(0xffffffffL)
+                if(frame!=null) {
+                    while(true) {
+                        val span=spokenSpans.peek()?:break
+                        if(span.id!=generation.get() || frame>=span.lastFrame) {spokenSpans.poll();continue}
+                        if(frame>=span.firstFrame && highlightStart!=span.start) markPassage(span.start,span.end)
+                        break
+                    }
+                }
+            }
+            highlightHandler.postDelayed(this,80)
+        }
+    }
+    private fun clearHighlight(){highlight?.let{editor.text.removeSpan(it)};highlight=null;highlightStart=-1}
+    private fun markPassage(start:Int,end:Int){
+        clearHighlight()
+        if(start<0 || end>editor.text.length || end<=start)return
+        highlight=BackgroundColorSpan(0xffffeb73.toInt()).also{editor.text.setSpan(it,start,end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)}
+        highlightStart=start
+        editor.setSelection(start)
+        editor.layout?.let { layout ->
+            val top=layout.getLineTop(layout.getLineForOffset(start))
+            val bottom=top+layout.getLineBottom(layout.getLineForOffset(start))-top
+            if(top<editor.scrollY || bottom>editor.scrollY+editor.height-editor.totalPaddingTop-editor.totalPaddingBottom)editor.scrollTo(0,maxOf(0,top-editor.height/3))
+        }
+    }
     private lateinit var editor: EditText
     private lateinit var status: TextView
     private lateinit var play: Button
@@ -79,6 +119,7 @@ class MainActivity : Activity() {
         layout.addView(status)
         layout.addView(button("À propos et licences") {showLicenses()})
         setContentView(layout)
+        highlightHandler.post(highlightTick)
     }
     private fun showLicenses(){
         val names=(assets.list("licenses")?:emptyArray()).sorted()
@@ -93,7 +134,7 @@ class MainActivity : Activity() {
     private fun ui(job:()->Unit) {runOnUiThread {if(!destroyed)job()}}
     private fun message(text:String){ui {status.text=text}}
     private fun controls(){playFromCursor.isEnabled=!active;editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
-    private fun stopReading(){generation.incrementAndGet();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
+    private fun stopReading(){generation.incrementAndGet();spokenSpans.clear();clearHighlight();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
     private fun pauseReading(){if(!active||paused)return;paused=true;track?.let{try{it.pause()}catch(_:IllegalStateException){}};controls();status.text="En pause. ▶ Continuer reprend au même endroit.";window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
     private fun resumeReading(){if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return};paused=false;track?.play();controls();status.text="Lecture reprise.";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
     private fun copyAssets(path:String,target:File){
@@ -113,6 +154,7 @@ class MainActivity : Activity() {
         if(active)return
         val fullText=editor.text.toString()
         val text=if(fromCursor) ReadingStart.fromCursor(fullText,editor.selectionStart,editor.selectionEnd) else fullText
+        val baseOffset=fullText.length-text.length
         if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
@@ -128,13 +170,14 @@ class MainActivity : Activity() {
                 track=output
                 if(!paused)output.play()
                 var frames=0L
-                val parts=TextChunks.split(text)
+                val parts=TextChunks.ranges(text)
                 for((index,part) in parts.withIndex()){
                     if(id!=generation.get())break
                     while(paused && id==generation.get())Thread.sleep(40)
                     if(id!=generation.get())break
                     ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
-                    val audio=tts.generateWithCallback(part,0,rate){if(id==generation.get())1 else 0}
+                    val audio=tts.generateWithCallback(part.text,0,rate){if(id==generation.get())1 else 0}
+                    if(id==generation.get() && audio.samples.isNotEmpty())spokenSpans.add(SpokenSpan(id,frames,frames+audio.samples.size,baseOffset+part.start,baseOffset+part.end))
                     var offset=0
                     while(offset<audio.samples.size && id==generation.get()){
                         if(paused){Thread.sleep(30);continue}
@@ -148,7 +191,7 @@ class MainActivity : Activity() {
             } catch(e:Exception){if(id==generation.get())message("Lecture impossible : ${e.message}")}
             finally {
                 track=null;try{output?.stop();output?.release()}catch(_:Exception){}
-                ui{if(id==generation.get()){active=false;paused=false;controls();audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(!status.text.startsWith("Lecture impossible"))status.text="Lecture terminée."}}
+                ui{if(id==generation.get()){spokenSpans.clear();clearHighlight();active=false;paused=false;controls();audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(!status.text.startsWith("Lecture impossible"))status.text="Lecture terminée."}}
             }
         }
     }
@@ -198,5 +241,5 @@ class MainActivity : Activity() {
     }
     override fun onSaveInstanceState(out:Bundle){out.putString("text",editor.text.toString());super.onSaveInstanceState(out)}
     override fun onStop(){pauseReading();getPreferences(MODE_PRIVATE).edit().putString("text",editor.text.toString().take(100000)).apply();super.onStop()}
-    override fun onDestroy(){destroyed=true;stopReading();worker.execute{engine?.release();engine=null};worker.shutdown();super.onDestroy()}
+    override fun onDestroy(){destroyed=true;highlightHandler.removeCallbacks(highlightTick);stopReading();worker.execute{engine?.release();engine=null};worker.shutdown();super.onDestroy()}
 }

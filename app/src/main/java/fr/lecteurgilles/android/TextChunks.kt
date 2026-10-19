@@ -1,6 +1,16 @@
 package fr.lecteurgilles.android
 
+data class TextPassage(val text:String,val start:Int,val end:Int)
 object TextChunks {
+    fun ranges(text:String,limit:Int=600):List<TextPassage> {
+        var offset=0
+        return split(text,limit).map { part ->
+            val start=text.indexOf(part,offset)
+            check(start>=offset)
+            offset=start+part.length
+            TextPassage(part,start,offset)
+        }
+    }
     fun split(text: String, limit: Int = 600): List<String> {
         require(limit > 1)
         val parts = mutableListOf<String>()
