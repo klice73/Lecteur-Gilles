@@ -33,6 +33,12 @@ class ReaderTest {
                 scenario.onActivity { a ->position=(field(a,"track") as? AudioTrack)?.playbackHeadPosition?:0 }
             }
             assertTrue("La voix Gilles n'a pas produit de lecture",position>=3000)
+            // Version 1.5 : le surlignage avance mot à mot pendant la lecture
+            val vus=HashSet<Int>()
+            val fin=System.currentTimeMillis()+4000
+            while(System.currentTimeMillis()<fin){Thread.sleep(60);scenario.onActivity{a->vus.add(field(a,"highlightStart") as Int)}}
+            vus.remove(-1)
+            assertTrue("Le surlignage ne suit pas mot à mot : ${vus.size} positions",vus.size>=4)
             scenario.onActivity { a -> (field(a,"pause") as Button).performClick() }
             Thread.sleep(250)
             var first=0
@@ -42,6 +48,8 @@ class ReaderTest {
                 assertEquals("▶ Continuer",(field(a,"play") as Button).text.toString())
                 first=(field(a,"track") as AudioTrack).playbackHeadPosition
                 marked=field(a,"highlightStart") as Int
+                val pos=a.getPreferences(android.content.Context.MODE_PRIVATE).getInt("position",-1)
+                assertTrue("Position non enregistrée à la pause : $pos",pos>=if(fromCursor) prefix.length else 0)
                 assertTrue("Le passage lu n’est pas surligné",marked>=if(fromCursor) prefix.length else 0)
                 assertEquals(original,(field(a,"editor") as EditText).text.toString())
             }
@@ -60,12 +68,35 @@ class ReaderTest {
                 assertEquals(-1,field(a,"highlightStart") as Int)
                 val editor=field(a,"editor") as EditText
                 assertTrue(editor.isEnabled)
+                assertTrue("Reprendre inactif après l'arrêt",(field(a,"resume") as Button).isEnabled)
                 assertEquals(original,editor.text.toString())
                 editor.setSelection(editor.text.length)
                 (field(a,"playFromCursor") as Button).performClick()
                 assertFalse(field(a,"active") as Boolean)
                 assertEquals(-1,field(a,"highlightStart") as Int)
                 assertTrue((field(a,"status") as android.widget.TextView).text.contains("fin du texte"))
+            }
+        }
+    }
+    @Test fun positionKeptAfterClosing() {
+        val original="Premier paragraphe à ignorer.\n"+"Gilles lit ce texte, phrase après phrase, pour vérifier la reprise. ".repeat(6)
+        var avant=-1
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { a -> val e=field(a,"editor") as EditText; e.setText(original); e.setSelection(original.indexOf("Gilles")); (field(a,"playFromCursor") as Button).performClick() }
+            val deadline=System.currentTimeMillis()+180000
+            var position=0
+            while(System.currentTimeMillis()<deadline && position<20000){Thread.sleep(200);scenario.onActivity{a->position=(field(a,"track") as? AudioTrack)?.playbackHeadPosition?:0}}
+            assertTrue("Pas de lecture",position>=20000)
+            scenario.onActivity { a -> (field(a,"pause") as Button).performClick(); avant=a.getPreferences(android.content.Context.MODE_PRIVATE).getInt("position",-1) }
+            assertTrue("Position avant fermeture : $avant",avant>=original.indexOf("Gilles"))
+        }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { a ->
+                val e=field(a,"editor") as EditText
+                assertEquals("Texte non retrouvé après fermeture",original,e.text.toString())
+                assertEquals("Curseur non replacé",avant,e.selectionStart)
+                assertTrue("Reprendre inactif après réouverture",(field(a,"resume") as Button).isEnabled)
+                MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a)
             }
         }
     }

@@ -13,7 +13,10 @@ environ 8 trames. Les plafonds sont donc 20 trames (phonemes, ponctuation) et
 vitesse), inseres juste apres le noeud /Ceil du graphe. Le texte, les phonemes et la voix ne changent
 pas ; seules les durees aberrantes sont ramenees a une valeur normale.
 
-Usage : python plafonner_voix.py entree.onnx sortie.onnx
+Usage : python plafonner_voix.py entree.onnx sortie.onnx [--alignement]
+--alignement (voix Windows, version 1.5) : expose aussi la duree plafonnee de
+chaque son comme seconde sortie du modele. Piper s'en sert pour fournir
+l'alignement exact des mots (surlignage mot a mot). Sans effet sur l'audio.
 Le fichier .onnx.json de la voix reste le meme (copier-le a cote de la sortie).
 """
 import sys
@@ -26,12 +29,22 @@ PLAFOND_SPECIAUX = 8.0    # jetons sans son « _ », « ^ », « $ » (sains : <
 MARQUE = 'lecteur_gilles_plafond_durees'
 
 
-def plafonner(entree, sortie):
+def _exposer(m):
+    if any(o.name == 'duree_plafonnee' for o in m.graph.output):
+        return False
+    info = onnx.ValueInfoProto()
+    info.name = 'duree_plafonnee'
+    m.graph.output.append(info)
+    return True
+
+
+def plafonner(entree, sortie, alignement=False):
     m = onnx.load(entree)
     g = m.graph
     if any(p.key == MARQUE for p in m.metadata_props):
+        ajoute = alignement and _exposer(m)
         onnx.save(m, sortie)
-        return 'deja plafonne'
+        return 'deja plafonne' + (' ; alignement expose' if ajoute else '')
     ceil = [n for n in g.node if n.op_type == 'Ceil']
     gather = [n for n in g.node if n.output and n.output[0] == '/Gather_1_output_0' and 'scales' in n.input]
     if len(ceil) != 1 or len(gather) != 1:
@@ -68,9 +81,11 @@ def plafonner(entree, sortie):
     verif.CopyFrom(m)
     del verif.metadata_props[:]
     onnx.checker.check_model(verif)
+    if alignement:
+        _exposer(m)
     onnx.save(m, sortie)
-    return 'plafond insere (%d consommateurs rebranches)' % len(consommateurs)
+    return 'plafond insere (%d consommateurs rebranches)%s' % (len(consommateurs), ' ; alignement expose' if alignement else '')
 
 
 if __name__ == '__main__':
-    print(plafonner(sys.argv[1], sys.argv[2]))
+    print(plafonner(sys.argv[1], sys.argv[2], '--alignement' in sys.argv[3:]))

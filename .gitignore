@@ -19,3 +19,10 @@ windows/*.exe
 windows/Gilles.ico
 app/src/main/assets/licenses/
 **/__pycache__/
+
+# textes personnels du lecteur Windows
+windows/session/
+windows/session-avant-test/
+windows/runtime/
+windows/flux/
+windows/req.json

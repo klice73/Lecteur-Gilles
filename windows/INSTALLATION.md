@@ -29,3 +29,7 @@ Le surlignage jaune suit le passage audio joué ; il reste fixe en pause, avance
 ## Version 1.4 : voix Gilles plafonnée
 
 Télécharger `fr_FR-gilles-low.onnx` dans la version publiée sur GitHub (Releases) et remplacer `voix\fr_FR-gilles-low.onnx`. Ce fichier corrige le bredouillement. Il diffère du fichier de Hugging Face : ne pas relancer `prepare_voices.py` ensuite (la somme de contrôle ne correspondrait plus). Pour plafonner un modèle soi-même : `python plafonner_voix.py entree.onnx sortie.onnx` (paquet `onnx` requis).
+
+## Version 1.5 : surlignage mot à mot et mémoire de lecture
+
+Le paquet `Lecteur-Gilles-Windows-1.5.zip` publié sur GitHub contient `Piper-Gilles.exe`, `lecteur.py` et la voix Gilles avec alignement. Mode d'emploi : `MISE-A-JOUR-1.5.txt`. Le texte et la position sont gardés dans le sous-dossier `session`. Test sans carte son : `Piper-Gilles.exe --test-minutage [part-000001.json]` (écrit `verification-minutage.txt` ; met de côté puis restaure le dossier `session`).

@@ -1,0 +1,36 @@
+LECTEUR GILLES 1.5 POUR WINDOWS : MISE A JOUR
+
+Nouveautes
+  - Surlignage mot a mot : la phrase lue est en jaune clair, le mot prononce en jaune fonce.
+  - Le texte et la position de lecture sont conserves a la fermeture du lecteur,
+    pendant une pause, a l'arret, et toutes les 2 secondes environ pendant la lecture
+    (coupure de courant ou fermeture brutale : on perd au plus la phrase en cours).
+    Au prochain demarrage, cliquer sur « ⟲ Reprendre ou j'etais ».
+  - Voix Gilles sans bredouillement (version 1.4) avec, en plus, la duree de chaque son :
+    c'est ce qui permet au surlignage de suivre les mots exactement.
+
+Installation (environ 1 minute)
+  1. Fermer le lecteur Gilles.
+  2. Ouvrir le dossier ou se trouve Piper-Gilles.exe (sur D:).
+     Par prudence, copier Piper-Gilles.exe, lecteur.py et voix\fr_FR-gilles-low.onnx
+     dans un dossier « ancienne-version ».
+  3. Copier le contenu de ce paquet dans ce dossier, en acceptant de remplacer :
+       Piper-Gilles.exe
+       lecteur.py
+       voix\fr_FR-gilles-low.onnx
+       voix\fr_FR-gilles-low.onnx.json
+  4. Relancer le lecteur avec le raccourci du bureau (inchange).
+
+Ou est garde le texte ?
+  Dans le sous-dossier « session » du lecteur (texte.txt et position.txt), sur votre
+  ordinateur seulement. Rien n'est envoye sur Internet. Supprimer ce dossier efface
+  la memoire de lecture.
+
+Limites connues
+  - Avec la voix Siwis, le surlignage des mots est estime (la phrase reste exacte).
+  - Les nombres ecrits en chiffres (ex. « 1 250 ») peuvent rendre la phrase estimee
+    plutot qu'exacte : le mot surligne peut alors avoir un mot d'avance ou de retard.
+  - Ne pas relancer prepare_voices.py : il remettrait la voix d'origine (bredouillement).
+
+Verification faite avant publication : voir verification-minutage.txt (test sur une
+machine Windows de GitHub, sans carte son : la lecture audio reelle n'y est pas testee).

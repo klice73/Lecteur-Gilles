@@ -13,13 +13,14 @@ Il s'agit d'une version de test signée avec une clé de développement. Les ver
 - Collez un texte ou ouvrez un PDF textuel, DOCX, ODT, TXT ou HTML.
 - Appuyez sur **▶ Lire**, **Ⅱ Pause**, **▶ Continuer**, **■ Arrêter**.
 - Pour sauter la table des matières, placez le curseur puis choisissez **▶ Lire à partir du curseur**. Une sélection commence à son début et la lecture continue jusqu’à la fin. Le texte reste intact. Arrêtez la lecture en cours avant de changer de départ.
-- Le passage effectivement joué est surligné en jaune et reste visible par défilement automatique. Le surlignage suit les passages, pas chaque mot, et reste fixe pendant la pause.
+- Version 1.5 : le surlignage suit la lecture mot à mot (phrase en jaune clair, mot en jaune foncé). Sous Windows, les mots sont alignés exactement grâce à la durée de chaque son fournie par la voix ; sur Android, le début et la fin de chaque phrase sont exacts et les mots sont répartis selon leur longueur. Le surlignage reste fixe pendant la pause.
+- Version 1.5 : le texte et la position de lecture sont conservés à la fermeture, en pause, à l'arrêt, à chaque phrase pendant la lecture (Android) ou toutes les 2 s (Windows), et quand des écouteurs ou un casque Bluetooth se déconnectent (Android : la lecture se met en pause). Au retour : **⟲ Reprendre où j'étais**.
 - La pause conserve la position du flux audio. Aucun remplacement par la voix Android.
 - Réglez la vitesse avant la lecture. Les longs textes sont traités par passages.
 - La lecture se met en pause en arrière-plan ou en cas de perte du focus audio.
 - Version 1.4 (Android et Windows) : correction du bredouillement (« ble ble ») avant ou après certains passages. Cause mesurée : le modèle Gilles attribue parfois plusieurs secondes à des jetons sans son (début, silence, fin), surtout sur les phrases courtes. Le modèle est corrigé en plafonnant ces durées (`plafonner_voix.py`) ; le texte, les phonèmes et la voix ne changent pas. Windows : remplacer `voix/fr_FR-gilles-low.onnx` par le fichier publié avec la version.
 
-Gilles et le moteur sont intégrés à l'APK. L'application ne demande aucune permission Internet et n'envoie pas de documents à un serveur. Le dernier texte (jusqu'à 100 000 caractères) reste enregistré localement pour la réouverture.
+Gilles et le moteur sont intégrés à l'APK. L'application ne demande aucune permission Internet et n'envoie pas de documents à un serveur. Le texte entier et la position de lecture restent enregistrés localement, dans le stockage privé de l'application, pour la réouverture.
 
 ## Limites
 

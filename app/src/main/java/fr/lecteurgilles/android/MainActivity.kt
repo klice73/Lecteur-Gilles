@@ -25,11 +25,14 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipInputStream
 
 class MainActivity : Activity() {
-    private data class SpokenSpan(val id:Int,val firstFrame:Long,val lastFrame:Long,val start:Int,val end:Int)
+    /** Version 1.5 : un élément par mot (avec sa phrase), dans l'ordre de l'audio. */
+    private data class SpokenSpan(val id:Int,val firstFrame:Long,val lastFrame:Long,val start:Int,val end:Int,val phraseStart:Int,val phraseEnd:Int)
     private val spokenSpans=ConcurrentLinkedQueue<SpokenSpan>()
     private val highlightHandler=Handler(Looper.getMainLooper())
     private var highlight:BackgroundColorSpan?=null
+    private var phraseHighlight:BackgroundColorSpan?=null
     private var highlightStart=-1
+    private var phraseHighlightStart=-1
     private val highlightTick=object:Runnable {
         override fun run(){
             if(destroyed)return
@@ -39,32 +42,76 @@ class MainActivity : Activity() {
                     while(true) {
                         val span=spokenSpans.peek()?:break
                         if(span.id!=generation.get() || frame>=span.lastFrame) {spokenSpans.poll();continue}
-                        if(frame>=span.firstFrame && highlightStart!=span.start) markPassage(span.start,span.end)
+                        if(frame>=span.firstFrame && highlightStart!=span.start) markWord(span)
                         break
                     }
                 }
             }
-            highlightHandler.postDelayed(this,80)
+            highlightHandler.postDelayed(this,40)
         }
     }
-    private fun clearHighlight(){highlight?.let{editor.text.removeSpan(it)};highlight=null;highlightStart=-1}
-    private fun markPassage(start:Int,end:Int){
-        clearHighlight()
-        if(start<0 || end>editor.text.length || end<=start)return
-        highlight=BackgroundColorSpan(0xffffeb73.toInt()).also{editor.text.setSpan(it,start,end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)}
-        highlightStart=start
-        editor.setSelection(start)
-        editor.layout?.let { layout ->
-            val top=layout.getLineTop(layout.getLineForOffset(start))
-            val bottom=top+layout.getLineBottom(layout.getLineForOffset(start))-top
-            if(top<editor.scrollY || bottom>editor.scrollY+editor.height-editor.totalPaddingTop-editor.totalPaddingBottom)editor.scrollTo(0,maxOf(0,top-editor.height/3))
+    private fun clearHighlight(){
+        highlight?.let{editor.text.removeSpan(it)};highlight=null;highlightStart=-1
+        phraseHighlight?.let{editor.text.removeSpan(it)};phraseHighlight=null;phraseHighlightStart=-1
+    }
+    /** Phrase en jaune clair, mot en cours en jaune foncé ; défile seulement si le mot sort de l'écran. */
+    private fun markWord(s:SpokenSpan){
+        val n=editor.text.length
+        if(s.start<0 || s.end>n || s.end<=s.start)return
+        if(phraseHighlightStart!=s.phraseStart){
+            phraseHighlight?.let{editor.text.removeSpan(it)}
+            phraseHighlight=null;phraseHighlightStart=-1
+            if(s.phraseStart>=0 && s.phraseEnd<=n && s.phraseEnd>s.phraseStart) {
+                phraseHighlight=BackgroundColorSpan(0xfffff6c4.toInt()).also{editor.text.setSpan(it,s.phraseStart,s.phraseEnd,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)}
+                phraseHighlightStart=s.phraseStart
+            }
+            notePosition(if(s.phraseStart>=0) s.phraseStart else s.start)
         }
+        highlight?.let{editor.text.removeSpan(it)}
+        highlight=BackgroundColorSpan(0xffffd54f.toInt()).also{editor.text.setSpan(it,s.start,s.end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)}
+        highlightStart=s.start
+        editor.setSelection(s.start)
+        editor.layout?.let { layout ->
+            val line=layout.getLineForOffset(s.start)
+            val top=layout.getLineTop(line)+editor.totalPaddingTop
+            val bottom=layout.getLineBottom(line)+editor.totalPaddingTop
+            if(top<editor.scrollY || bottom>editor.scrollY+editor.height)editor.scrollTo(0,maxOf(0,top-editor.height/3))
+        }
+    }
+    // ---- Version 1.5 : texte et position de lecture conservés (fermeture, arrêt du téléphone, déconnexion) ----
+    private val textFile by lazy { File(filesDir,"texte-courant.txt") }
+    private var readingHash=""           // empreinte du texte lu (fixe pendant la lecture)
+    private fun prefs()=getPreferences(MODE_PRIVATE)
+    private fun empreinte(t:CharSequence)="${t.length}-${t.toString().hashCode()}"
+    private fun notePosition(position:Int){
+        if(readingHash.isEmpty())return
+        prefs().edit().putInt("position",position).putString("position_texte",readingHash).apply()
+    }
+    private fun savedPosition():Int{
+        val p=prefs().getInt("position",-1)
+        if(p<0 || prefs().getString("position_texte","")!=empreinte(editor.text) || p>=editor.text.length)return -1
+        return p
+    }
+    private fun saveText(){
+        try { val tmp=File(filesDir,"texte-courant.tmp"); tmp.writeText(editor.text.toString()); if(!tmp.renameTo(textFile)){textFile.delete();tmp.renameTo(textFile)} } catch(_:Exception){}
+    }
+    private fun loadText():String? = try { if(textFile.exists()) textFile.readText() else null } catch(_:Exception){ null }
+    private fun resumeWhereLeft(){
+        if(active){status.text="Arrêtez la lecture en cours avant de reprendre.";return}
+        val p=savedPosition()
+        if(p<0){status.text="Aucune position de lecture enregistrée pour ce texte.";return}
+        editor.setSelection(p);startReading(true)
+    }
+    private val noisy=object:android.content.BroadcastReceiver(){
+        // écouteurs ou casque Bluetooth débranchés : pause (et position enregistrée)
+        override fun onReceive(c:android.content.Context?,i:Intent?){ if(i?.action==AudioManager.ACTION_AUDIO_BECOMING_NOISY) pauseReading() }
     }
     private lateinit var editor: EditText
     private lateinit var status: TextView
     private lateinit var play: Button
     private lateinit var pause: Button
     private lateinit var playFromCursor: Button
+    private lateinit var resume: Button
     private lateinit var speed: Spinner
     private val worker = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger()
@@ -93,7 +140,7 @@ class MainActivity : Activity() {
         tools.addView(button("Ouvrir un document") { openDocument() }, LinearLayout.LayoutParams(0,dp(56),1f))
         tools.addView(button("Coller") {
             val clip = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clip.primaryClip?.getItemAt(0)?.coerceToText(this)?.let { stopReading(); editor.setText(it) }
+            clip.primaryClip?.getItemAt(0)?.coerceToText(this)?.let { stopReading(); editor.setText(it); saveText(); controls() }
         }, LinearLayout.LayoutParams(0,dp(56),0.5f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
@@ -103,7 +150,7 @@ class MainActivity : Activity() {
             textSize=18f; gravity=android.view.Gravity.TOP
             inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setHorizontallyScrolling(false)
-            setText(state?.getString("text") ?: getPreferences(MODE_PRIVATE).getString("text","Bonjour ! Je suis Gilles. Collez votre texte, puis appuyez sur Lire."))
+            setText(state?.getString("text") ?: loadText() ?: getPreferences(MODE_PRIVATE).getString("text","Bonjour ! Je suis Gilles. Collez votre texte, puis appuyez sur Lire."))
         }
         layout.addView(editor,LinearLayout.LayoutParams(-1,0,1f))
         val controls=LinearLayout(this)
@@ -113,13 +160,20 @@ class MainActivity : Activity() {
         controls.addView(button("■ Arrêter") {stopReading()},LinearLayout.LayoutParams(0,dp(60),1f))
         layout.addView(controls)
         playFromCursor=button("▶ Lire à partir du curseur") {startReading(true)}
-        layout.addView(playFromCursor)
+        resume=button("⟲ Reprendre où j'étais") {resumeWhereLeft()}
+        val cursorRow=LinearLayout(this)
+        cursorRow.addView(playFromCursor,LinearLayout.LayoutParams(0,dp(56),1f));cursorRow.addView(resume,LinearLayout.LayoutParams(0,dp(56),1f))
+        layout.addView(cursorRow)
         layout.addView(TextView(this).apply {text="Touchez le texte pour placer le curseur. Une sélection commence à son début ; la lecture continue jusqu’à la fin.";textSize=12f})
         status=TextView(this).apply {text="Prêt. La première préparation peut prendre un moment.";textSize=14f;setPadding(0,12,0,8)}
         layout.addView(status)
         layout.addView(button("À propos et licences") {showLicenses()})
         setContentView(layout)
         highlightHandler.post(highlightTick)
+        registerReceiver(noisy,android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        val p=savedPosition()
+        if(p>=0){editor.setSelection(p);status.text="Position de lecture retrouvée. Touchez ⟲ Reprendre où j'étais."}
+        controls()
     }
     private fun showLicenses(){
         val names=(assets.list("licenses")?:emptyArray()).sorted()
@@ -133,10 +187,12 @@ class MainActivity : Activity() {
     private fun button(label:String,action:()->Unit)=Button(this).apply {text=label;isAllCaps=false;setOnClickListener{action()}}
     private fun ui(job:()->Unit) {runOnUiThread {if(!destroyed)job()}}
     private fun message(text:String){ui {status.text=text}}
-    private fun controls(){playFromCursor.isEnabled=!active;editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
-    private fun stopReading(){generation.incrementAndGet();spokenSpans.clear();clearHighlight();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
-    private fun pauseReading(){if(!active||paused)return;paused=true;track?.let{try{it.pause()}catch(_:IllegalStateException){}};controls();status.text="En pause. ▶ Continuer reprend au même endroit.";window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
+    private fun controls(){playFromCursor.isEnabled=!active;resume.isEnabled=!active&&savedPosition()>=0;editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
+    private fun stopReading(){if(active)savePosition();generation.incrementAndGet();spokenSpans.clear();clearHighlight();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
+    private fun pauseReading(){if(!active||paused)return;paused=true;savePosition();track?.let{try{it.pause()}catch(_:IllegalStateException){}};controls();status.text="En pause. ▶ Continuer reprend au même endroit.";window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
     private fun resumeReading(){if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return};paused=false;track?.play();controls();status.text="Lecture reprise.";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
+    /** Enregistre tout de suite (pause, arrêt, fermeture) ; la phrase en cours est déjà notée. */
+    private fun savePosition(){ if(phraseHighlightStart>=0) notePosition(phraseHighlightStart) else if(highlightStart>=0) notePosition(highlightStart) }
     private fun copyAssets(path:String,target:File){
         val files=assets.list(path)?:emptyArray()
         if(files.isEmpty()){target.parentFile?.mkdirs();assets.open(path).use{input->target.outputStream().use{input.copyTo(it)}}}
@@ -146,7 +202,8 @@ class MainActivity : Activity() {
         engine?.let{return it}
         val name="vits-piper-fr_FR-gilles-low"
         val dir=File(filesDir,name)
-        if(!File(dir,"ready-v1").exists()){copyAssets(name,dir);File(dir,"ready-v1").writeText("ok")}
+        val marque="ready-voix-plafonnee-1" // changer ce nom à chaque nouvelle voix livrée dans l’APK
+        if(!File(dir,marque).exists()){dir.deleteRecursively();copyAssets(name,dir);File(dir,marque).writeText("ok")}
         return OfflineTts(config=OfflineTtsConfig(model=OfflineTtsModelConfig(
             vits=OfflineTtsVitsModelConfig(model=File(dir,"fr_FR-gilles-low.onnx").path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=2),maxNumSentences=1)).also{engine=it}
     }
@@ -157,10 +214,12 @@ class MainActivity : Activity() {
         val baseOffset=fullText.length-text.length
         if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
+        readingHash=empreinte(fullText);saveText()
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
         active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         worker.execute {
             var output:AudioTrack?=null
+            var finished=false
             try {
                 val tts=getEngine();if(id!=generation.get())return@execute
                 val sampleRate=tts.sampleRate()
@@ -176,22 +235,34 @@ class MainActivity : Activity() {
                     while(paused && id==generation.get())Thread.sleep(40)
                     if(id!=generation.get())break
                     ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
-                    val audio=tts.generateWithCallback(part.text,0,rate){if(id==generation.get())1 else 0}
-                    if(id==generation.get() && audio.samples.isNotEmpty())spokenSpans.add(SpokenSpan(id,frames,frames+audio.samples.size,baseOffset+part.start,baseOffset+part.end))
-                    var offset=0
-                    while(offset<audio.samples.size && id==generation.get()){
-                        if(paused){Thread.sleep(30);continue}
-                        val written=output.write(audio.samples,offset,minOf(4096,audio.samples.size-offset),AudioTrack.WRITE_NON_BLOCKING)
-                        if(written<0)throw IllegalStateException("Erreur audio $written")
-                        offset+=written;frames+=written
-                        if(written==0)Thread.sleep(10)
+                    // Version 1.5 : phrase par phrase, chaque mot minuté (surlignage mot à mot)
+                    for(r in Minutage.phrases(part.text)){
+                        if(id!=generation.get())break
+                        val phrase=part.text.substring(r.first,r.last+1)
+                        val audio=tts.generateWithCallback(phrase,0,rate){if(id==generation.get())1 else 0}
+                        val samples=audio.samples
+                        if(id!=generation.get() || samples.isEmpty())continue
+                        val debutPhrase=baseOffset+part.start+r.first
+                        val finPhrase=debutPhrase+phrase.trimEnd().length
+                        for(m in Minutage.minuter(phrase,samples,sampleRate))
+                            spokenSpans.add(SpokenSpan(id,frames+m.t0,frames+m.t1,debutPhrase+m.debut,debutPhrase+m.fin,debutPhrase,finPhrase))
+                        var offset=0
+                        while(offset<samples.size && id==generation.get()){
+                            if(paused){Thread.sleep(30);continue}
+                            val written=output.write(samples,offset,minOf(4096,samples.size-offset),AudioTrack.WRITE_NON_BLOCKING)
+                            if(written<0)throw IllegalStateException("Erreur audio $written")
+                            offset+=written;frames+=written
+                            if(written==0)Thread.sleep(10)
+                        }
                     }
                 }
                 while(id==generation.get() && (output.playbackHeadPosition.toLong() and 0xffffffffL)<frames)Thread.sleep(40)
+                finished=id==generation.get()
             } catch(e:Exception){if(id==generation.get())message("Lecture impossible : ${e.message}")}
             finally {
                 track=null;try{output?.stop();output?.release()}catch(_:Exception){}
-                ui{if(id==generation.get()){spokenSpans.clear();clearHighlight();active=false;paused=false;controls();audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(!status.text.startsWith("Lecture impossible"))status.text="Lecture terminée."}}
+                val fini=id==generation.get() && finished
+                ui{if(id==generation.get()){if(fini){prefs().edit().putInt("position",-1).apply()};spokenSpans.clear();clearHighlight();active=false;paused=false;controls();audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);if(!status.text.startsWith("Lecture impossible"))status.text="Lecture terminée."}}
             }
         }
     }
@@ -204,7 +275,7 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode,resultCode,data)
         if(requestCode!=10||resultCode!=RESULT_OK)return
         val uri=data?.data?:return;stopReading();val id=generation.incrementAndGet();status.text="Ouverture du document…"
-        worker.execute{try{val text=readDocument(uri);ui{if(id==generation.get()){editor.setText(text);status.text="Document prêt. Appuyez sur ▶ Lire."}}}catch(e:Exception){ui{if(id==generation.get())status.text="Ouverture impossible : ${e.message}"}}}
+        worker.execute{try{val text=readDocument(uri);ui{if(id==generation.get()){editor.setText(text);saveText();controls();status.text="Document prêt. Appuyez sur ▶ Lire."}}}catch(e:Exception){ui{if(id==generation.get())status.text="Ouverture impossible : ${e.message}"}}}
     }
     private fun readDocument(uri:Uri):String{
         val mime=contentResolver.getType(uri).orEmpty()
@@ -240,6 +311,6 @@ class MainActivity : Activity() {
         return text
     }
     override fun onSaveInstanceState(out:Bundle){out.putString("text",editor.text.toString());super.onSaveInstanceState(out)}
-    override fun onStop(){pauseReading();getPreferences(MODE_PRIVATE).edit().putString("text",editor.text.toString().take(100000)).apply();super.onStop()}
-    override fun onDestroy(){destroyed=true;highlightHandler.removeCallbacks(highlightTick);stopReading();worker.execute{engine?.release();engine=null};worker.shutdown();super.onDestroy()}
+    override fun onStop(){pauseReading();savePosition();if(!active)saveText();super.onStop()}
+    override fun onDestroy(){try{unregisterReceiver(noisy)}catch(_:Exception){};savePosition();destroyed=true;highlightHandler.removeCallbacks(highlightTick);stopReading();worker.execute{engine?.release();engine=null};worker.shutdown();super.onDestroy()}
 }

@@ -13,6 +13,15 @@ class Lecteur : Form {
     RichTextBox texte = new RichTextBox();
     int debutLecture, surligneDebut=-1, surligneLongueur;
     bool changeSurlignage;
+    // Version 1.5 : surlignage phrase (clair) + mot (fonce), suivi du temps audio.
+    int phraseDebut=-1, phraseLongueur;
+    int[][] minuteMots, minutePhrases; int passageDebut, motCourant=-1, phraseCourante=-1;
+    static readonly Color CouleurPhrase=Color.FromArgb(255,246,196), CouleurMot=Color.FromArgb(255,213,79);
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr fenetre, int message, IntPtr w, IntPtr l);
+    // Version 1.5 : texte et position conserves dans le dossier « session » du lecteur.
+    int positionLecture=-1; bool texteModifie=true, chargement, positionModifiee;
+    string empreinteSauvee; DateTime derniereSauvegarde=DateTime.MinValue;
+    Button reprendre;
     Label statut = new Label();
     ComboBox vitesse = new ComboBox();
     Process travail;
@@ -45,6 +54,7 @@ class Lecteur : Form {
     void Pauser() {
         if(!audioOuvert || suspendu)return;
         Audio("pause "+alias);suspendu=true;lire.Text="▶ Continuer";pause.Enabled=false;statut.Text="En pause. Cliquez sur ▶ Continuer pour reprendre au même endroit.";
+        SauverSession(true);
     }
     string destination, erreur = "";
     string racine = AppDomain.CurrentDomain.BaseDirectory;
@@ -84,37 +94,150 @@ class Lecteur : Form {
         var actions=new FlowLayoutPanel {Dock=DockStyle.Fill, Padding=new Padding(0,10,0,0)}; grille.Controls.Add(actions,0,3);
         lire=Ajouter(actions,"▶ Lire tout",delegate { Continuer(); }); pause=Ajouter(actions,"Ⅱ Pause",delegate { Pauser(); });pause.Enabled=false; Ajouter(actions,"■ Arrêter",delegate { Arreter(); });
         lireCurseur=Ajouter(actions,"▶ Lire à partir du curseur",delegate { LireDepuisCurseur(); });
-        actions.SetFlowBreak(lireCurseur,true);
+        reprendre=Ajouter(actions,"⟲ Reprendre où j'étais",delegate { Reprendre(); });reprendre.Enabled=false;
+        actions.SetFlowBreak(reprendre,true);
         Ajouter(actions,"Enregistrer en WAV",delegate { Demarrer(true); });
         Ajouter(actions,"À propos et licences",delegate { AfficherLicences(); });
         var aide=new ToolTip();aide.SetToolTip(lireCurseur,"Cliquez dans le texte. Si du texte est sélectionné, la lecture commence au début de la sélection et continue jusqu’à la fin du document.");
         statut.Dock=DockStyle.Fill; statut.Text="Ouvrez ou glissez un PDF, DOCX, EPUB, ODT, HTML ou fichier texte."; grille.Controls.Add(statut,0,4);
         texte.MaxLength=int.MaxValue;
-        texte.TextChanged+=delegate {if(!changeSurlignage && audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}};
+        texte.TextChanged+=delegate {
+            if(changeSurlignage)return;
+            texteModifie=true;
+            if(!chargement) {positionLecture=-1;positionModifiee=true;}
+            if(audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}
+        };
         voix.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Voix choisie : "+voix.Text+". Appliquée à la prochaine lecture.";};
         vitesse.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Vitesse modifiée. Appliquée à la prochaine lecture.";};
         AllowDrop=true;
         DragEnter+=delegate(object s,DragEventArgs e) {if(e.Data.GetDataPresent(DataFormats.FileDrop))e.Effect=DragDropEffects.Copy;};
         DragDrop+=delegate(object s,DragEventArgs e) {try {var files=(string[])e.Data.GetData(DataFormats.FileDrop);if(files.Length>0)Importer(files[0]);}catch(Exception error){MessageBox.Show(error.Message,"Piper");}};
-        Directory.CreateDirectory(temp); timer.Interval=250; timer.Tick+=Poll; timer.Start();
-        FormClosing+=delegate { Arreter(); timer.Stop(); try {Directory.Delete(temp,true);} catch {} };
+        Directory.CreateDirectory(temp); timer.Interval=50; timer.Tick+=Poll; timer.Start();
+        FormClosing+=delegate { Arreter(); SauverSession(true); timer.Stop(); try {Directory.Delete(temp,true);} catch {} };
+        ChargerSession();
+        Shown+=delegate { if(positionLecture>=0 && positionLecture<=texte.TextLength) {texte.Select(positionLecture,0);texte.ScrollToCaret();} };
+    }
+    // ---- Session : texte et position de lecture (version 1.5) ----
+    string DossierSession { get { return Path.Combine(racine,"session"); } }
+    static string Empreinte(string s) {
+        ulong h=14695981039346656037UL;
+        foreach(char c in s) {h^=c;h*=1099511628211UL;}
+        return s.Length+"-"+h.ToString("x16");
+    }
+    static void EcrireSur(string chemin,string contenu) {
+        string tmp=chemin+".tmp";File.WriteAllText(tmp,contenu,new UTF8Encoding(false));
+        if(File.Exists(chemin))File.Replace(tmp,chemin,null);else File.Move(tmp,chemin);
+    }
+    void SauverSession(bool forcer) {
+        if(chargement)return;
+        if(!forcer && !texteModifie && !positionModifiee)return;
+        if(!forcer && (DateTime.Now-derniereSauvegarde).TotalSeconds<2)return;
+        try {
+            Directory.CreateDirectory(DossierSession);
+            if(texteModifie || empreinteSauvee==null) {
+                string t=texte.Text;string h=Empreinte(t);
+                if(h!=empreinteSauvee) {EcrireSur(Path.Combine(DossierSession,"texte.txt"),t);empreinteSauvee=h;}
+                texteModifie=false;
+            }
+            EcrireSur(Path.Combine(DossierSession,"position.txt"),empreinteSauvee+"\n"+positionLecture+"\n"+(documentOuvert??""));
+            positionModifiee=false;derniereSauvegarde=DateTime.Now;
+        } catch(Exception) {}
+    }
+    void ChargerSession() {
+        string fichierTexte=Path.Combine(DossierSession,"texte.txt"),fichierPosition=Path.Combine(DossierSession,"position.txt");
+        if(!File.Exists(fichierTexte))return;
+        chargement=true;
+        try {
+            string t=File.ReadAllText(fichierTexte,Encoding.UTF8);
+            texte.Text=t;
+            string h=Empreinte(texte.Text);empreinteSauvee=Empreinte(t)==h?h:null;texteModifie=empreinteSauvee==null;
+            if(File.Exists(fichierPosition)) {
+                string[] l=File.ReadAllText(fichierPosition,Encoding.UTF8).Split('\n');
+                int p;
+                if(l.Length>=2 && l[0]==h && int.TryParse(l[1],out p) && p>=0 && p<texte.TextLength) positionLecture=p;
+                if(l.Length>=3 && l[2].Trim().Length>0) {documentOuvert=l[2].Trim();Text="Piper — "+Path.GetFileName(documentOuvert);}
+            }
+            statut.Text=positionLecture>=0?"Texte et position de lecture retrouvés. Cliquez sur ⟲ Reprendre où j'étais.":"Texte précédent retrouvé.";
+        } catch(Exception) {} finally {chargement=false;}
+    }
+    void Reprendre() {
+        if(travail!=null || audioOuvert || lectureProgressive) {statut.Text="Arrêtez la lecture en cours avant de reprendre.";return;}
+        if(positionLecture<0 || positionLecture>=texte.TextLength) {statut.Text="Aucune position de lecture enregistrée pour ce texte.";return;}
+        Demarrer(false,null,positionLecture);
+    }
+    void NoterPosition(int position) {
+        if(position!=positionLecture) {positionLecture=position;positionModifiee=true;}
     }
     Button Ajouter(Control parent,string nom,Action action) {
         var b=new Button {Text=nom,AutoSize=true,Height=36,Padding=new Padding(8,3,8,3)};
         b.Click+=delegate {try {action();} catch(Exception e) {MessageBox.Show(e.Message,"Piper");}}; parent.Controls.Add(b);return b;
     }
-    void Surligner(int debut,int longueur) {
+    void Colorer(int debut,int longueur,Color couleur) {
+        if(debut<0 || longueur<=0 || debut+longueur>texte.TextLength)return;
+        texte.Select(debut,longueur);texte.SelectionBackColor=couleur;
+    }
+    /// Efface le surlignage (debut &lt; 0).
+    void Surligner(int debut,int longueur) {Surligner(debut,longueur,debut,longueur);}
+    /// Phrase en jaune clair, mot en cours en jaune fonce. Fait defiler seulement si le mot sort de l'ecran.
+    void Surligner(int pDebut,int pLongueur,int mDebut,int mLongueur) {
         changeSurlignage=true;
+        SendMessage(texte.Handle,0x000B,IntPtr.Zero,IntPtr.Zero); // WM_SETREDRAW off : pas de clignotement
         try {
-            if(surligneDebut>=0 && surligneDebut+surligneLongueur<=texte.TextLength) {texte.Select(surligneDebut,surligneLongueur);texte.SelectionBackColor=texte.BackColor;}
-            surligneDebut=debut;surligneLongueur=longueur;
-            if(debut>=0) {texte.Select(debut,longueur);texte.SelectionBackColor=Color.FromArgb(255,235,115);texte.Select(debut,0);texte.ScrollToCaret();}
-        } finally {changeSurlignage=false;}
+            if(phraseDebut!=pDebut || phraseLongueur!=pLongueur) {
+                Colorer(phraseDebut,phraseLongueur,texte.BackColor);
+                Colorer(surligneDebut,surligneLongueur,texte.BackColor);
+                if(pDebut>=0)Colorer(pDebut,pLongueur,CouleurPhrase);
+            } else if(surligneDebut>=0) Colorer(surligneDebut,surligneLongueur,pDebut>=0?CouleurPhrase:texte.BackColor);
+            phraseDebut=pDebut;phraseLongueur=pLongueur;surligneDebut=mDebut;surligneLongueur=mLongueur;
+            if(mDebut>=0) {
+                Colorer(mDebut,mLongueur,CouleurMot);
+                texte.Select(mDebut,0);
+            }
+        } finally {
+            SendMessage(texte.Handle,0x000B,new IntPtr(1),IntPtr.Zero);
+            if(mDebut>=0) {
+                Point p=texte.GetPositionFromCharIndex(mDebut);
+                if(p.Y<0 || p.Y>texte.ClientSize.Height-2*texte.Font.Height)texte.ScrollToCaret();
+            }
+            texte.Invalidate();
+            changeSurlignage=false;
+        }
+    }
+    static int[][] Tableau(object valeur) {
+        var liste=valeur as System.Collections.ArrayList;
+        if(liste==null)return new int[0][];
+        var res=new int[liste.Count][];
+        for(int i=0;i<liste.Count;i++) {
+            var l=(System.Collections.ArrayList)liste[i];
+            res[i]=new int[l.Count];for(int k=0;k<l.Count;k++)res[i][k]=Convert.ToInt32(l[k]);
+        }
+        return res;
+    }
+    /// Indice du dernier element dont le debut (ms) est &lt;= temps ; 0 si aucun.
+    static int IndiceAuTemps(int[][] liste,int temps) {
+        int bas=0,haut=liste.Length-1,res=0;
+        while(bas<=haut) {int m=(bas+haut)/2;if(liste[m][0]<=temps){res=m;bas=m+1;}else haut=m-1;}
+        return res;
+    }
+    /// Met le surlignage au mot prononce a l'instant « temps » (ms) du passage en cours.
+    void SuivreTemps(int temps) {
+        if(minuteMots==null || minuteMots.Length==0)return;
+        int m=IndiceAuTemps(minuteMots,temps);
+        int p=minutePhrases!=null && minutePhrases.Length>0?IndiceAuTemps(minutePhrases,temps):-1;
+        if(m==motCourant && p==phraseCourante)return;
+        motCourant=m;phraseCourante=p;
+        int md=debutLecture+passageDebut+minuteMots[m][2],ml=minuteMots[m][3]-minuteMots[m][2];
+        int pd=md,pl=ml;
+        if(p>=0) {pd=debutLecture+passageDebut+minutePhrases[p][2];pl=minutePhrases[p][3]-minutePhrases[p][2];}
+        Surligner(pd,pl,md,ml);
+        NoterPosition(pd);
     }
     void Arreter() {
         if(IsDisposed || texte.IsDisposed)return;
         int position=texte.SelectionStart;int selection=texte.SelectionLength;
         Surligner(-1,0);texte.Select(position,selection);
+        minuteMots=null;minutePhrases=null;motCourant=-1;phraseCourante=-1;
+        if(lectureProgressive)SauverSession(true);
         lectureProgressive=false;
         if(travail!=null) { if(!travail.HasExited) {
             var kill=new ProcessStartInfo("taskkill.exe","/PID "+travail.Id+" /T /F") {UseShellExecute=false,CreateNoWindow=true};
@@ -177,6 +300,8 @@ class Lecteur : Form {
     }
     void Poll(object sender,EventArgs args) {
         lireCurseur.Enabled=travail==null && !audioOuvert && !lectureProgressive;
+        reprendre.Enabled=lireCurseur.Enabled && positionLecture>=0 && positionLecture<texte.TextLength;
+        SauverSession(false);
         if(lectureProgressive) {PollLecture();return;}
         if(travail==null) {
             if(audioOuvert && !suspendu)try {if(Audio("status "+alias+" mode")=="stopped") {FermerAudio();statut.Text="Lecture terminée.";}}catch(Exception e){statut.Text=e.Message;}
@@ -211,22 +336,86 @@ class Lecteur : Form {
             }
             if(audioOuvert) {
                 if(suspendu)return;
-                if(Audio("status "+alias+" mode")!="stopped")return;
+                if(Audio("status "+alias+" mode")!="stopped") {
+                    int temps;if(int.TryParse(Audio("status "+alias+" position"),out temps))SuivreTemps(temps);
+                    return;
+                }
                 FermerAudio();if(audioCourant!=null) {File.Delete(audioCourant);File.Delete(Path.ChangeExtension(audioCourant,"json"));}audioCourant=null;
             }
             string prochain=Path.Combine(dossierLecture,"part-"+(passage+1).ToString("D6")+".wav");
             if(File.Exists(prochain)) {
-                passage++;audioCourant=prochain;LireAudio(prochain);
-                var limites=new JavaScriptSerializer().Deserialize<Dictionary<string,int>>(File.ReadAllText(Path.ChangeExtension(prochain,"json")));
-                Surligner(debutLecture+limites["start"],limites["end"]-limites["start"]);
+                passage++;audioCourant=prochain;
+                var limites=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.ChangeExtension(prochain,"json")));
+                passageDebut=Convert.ToInt32(limites["start"]);int passageFin=Convert.ToInt32(limites["end"]);
+                minuteMots=limites.ContainsKey("mots")?Tableau(limites["mots"]):new int[0][];
+                minutePhrases=limites.ContainsKey("phrases")?Tableau(limites["phrases"]):new int[0][];
+                motCourant=-1;phraseCourante=-1;
+                LireAudio(prochain);
+                if(minuteMots.Length>0)SuivreTemps(0);
+                else {Surligner(debutLecture+passageDebut,passageFin-passageDebut);NoterPosition(debutLecture+passageDebut);}
                 statut.Text="Lecture du passage "+passage+". Le reste du livre se prépare progressivement.";
             } else if(travail==null && File.Exists(Path.Combine(dossierLecture,"done"))) {
-                lectureProgressive=false;Surligner(-1,0);texte.ReadOnly=false;vitesse.Enabled=true;voix.Enabled=true;statut.Text="Lecture terminée.";
+                lectureProgressive=false;Surligner(-1,0);minuteMots=null;minutePhrases=null;texte.ReadOnly=false;vitesse.Enabled=true;voix.Enabled=true;statut.Text="Lecture terminée.";
+                NoterPosition(-1);SauverSession(true);
             } else statut.Text="Préparation du passage "+(passage+1)+"… Arrêter permet d’annuler.";
         } catch(Exception e) {Arreter();statut.Text="Erreur de lecture : "+e.Message;}
     }
+    /// Test sans carte son : surlignage mot/phrase selon le temps, et texte + position conserves a la reouverture.
+    static int TesterMinutage(string jsonPython) {
+        string racine=AppDomain.CurrentDomain.BaseDirectory,session=Path.Combine(racine,"session"),copie=session+"-avant-test";
+        string rapport=Path.Combine(racine,"verification-minutage.txt");
+        try {
+            if(Directory.Exists(copie))Directory.Delete(copie,true);
+            if(Directory.Exists(session))Directory.Move(session,copie);
+            string t="Première phrase ici, 😀 bien sûr. Deuxième phrase là.";
+            using(var f=new Lecteur()) {
+                f.Opacity=0;f.ShowInTaskbar=false;f.Show();Application.DoEvents();
+                f.texte.Text=t;f.debutLecture=0;f.passageDebut=0;
+                int i2=t.IndexOf("ici"),iE=t.IndexOf("😀"),iB=t.IndexOf("bien"),iD=t.IndexOf("Deuxième");
+                f.minuteMots=new int[][]{new[]{0,300,0,8},new[]{300,600,9,15},new[]{600,800,i2,i2+3},new[]{800,1000,iB,iB+4},new[]{1000,1300,iD,iD+8},new[]{1300,1600,iD+9,iD+16},new[]{1600,2000,iD+17,iD+19}};
+                f.minutePhrases=new int[][]{new[]{0,1000,0,iD-1},new[]{1000,2000,iD,t.Length}};
+                f.SuivreTemps(0);
+                if(f.surligneDebut!=0 || f.surligneLongueur!=8 || f.phraseDebut!=0)throw new Exception("Mot initial");
+                f.SuivreTemps(650);
+                if(f.surligneDebut!=i2)throw new Exception("Mot a 650 ms : "+f.surligneDebut);
+                f.texte.Select(i2,1);if(f.texte.SelectionBackColor.ToArgb()!=CouleurMot.ToArgb())throw new Exception("Couleur du mot");
+                f.texte.Select(0,1);if(f.texte.SelectionBackColor.ToArgb()!=CouleurPhrase.ToArgb())throw new Exception("Couleur de phrase");
+                f.SuivreTemps(900);if(f.surligneDebut!=iB)throw new Exception("Mot apres emoji (UTF-16)");
+                f.SuivreTemps(1450);
+                if(f.surligneDebut!=iD+9 || f.phraseDebut!=iD)throw new Exception("Phrase 2");
+                f.texte.Select(0,1);if(f.texte.SelectionBackColor.ToArgb()!=f.texte.BackColor.ToArgb())throw new Exception("Ancienne phrase non effacee");
+                f.texte.Select(i2,1);if(f.texte.SelectionBackColor.ToArgb()!=f.texte.BackColor.ToArgb())throw new Exception("Ancien mot non efface");
+                f.SuivreTemps(100);if(f.surligneDebut!=0)throw new Exception("Retour en arriere");
+                f.SuivreTemps(1450);
+                if(f.positionLecture!=iD)throw new Exception("Position notee : "+f.positionLecture);
+                if(f.texte.Text!=t)throw new Exception("Texte modifie par le surlignage");
+                f.SauverSession(true);
+                f.Surligner(-1,0);
+            }
+            using(var g=new Lecteur()) {
+                if(g.texte.Text!=t)throw new Exception("Texte non retrouve a la reouverture");
+                if(g.positionLecture!=t.IndexOf("Deuxième"))throw new Exception("Position non retrouvee : "+g.positionLecture);
+                g.Poll(null,EventArgs.Empty);if(!g.reprendre.Enabled)throw new Exception("Bouton Reprendre inactif");
+                g.texte.Text="Autre texte colle.";if(g.positionLecture!=-1)throw new Exception("Position d'un autre texte conservee");
+            }
+            string extra="";
+            if(jsonPython!=null) {
+                var d=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(jsonPython));
+                int[][] mots=Tableau(d["mots"]),phr=Tableau(d["phrases"]);
+                if(mots.Length==0 || phr.Length==0)throw new Exception("Minutage Python vide");
+                for(int k=1;k<mots.Length;k++)if(mots[k][0]<mots[k-1][0])throw new Exception("Minutage Python non croissant");
+                extra=" Minutage produit par lecteur.py lu : "+mots.Length+" mots, "+phr.Length+" phrases, "+d["exactes"]+" phrases alignees exactement.";
+            }
+            File.WriteAllText(rapport,"Reussi : surlignage mot et phrase selon le temps audio (y compris apres un emoji), effacement, retour en arriere, texte intact ; texte et position retrouves a la reouverture ; bouton Reprendre ; position annulee pour un autre texte."+extra+" "+DateTime.Now.ToString("s"));
+            return 0;
+        } catch(Exception e) {File.WriteAllText(rapport,"ECHEC : "+e);return 1;}
+        finally {
+            try {if(Directory.Exists(session))Directory.Delete(session,true);if(Directory.Exists(copie))Directory.Move(copie,session);} catch {}
+        }
+    }
     [STAThread] static void Main(string[] args) {
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+        if(args.Length>0 && args[0]=="--test-minutage") {Environment.ExitCode=TesterMinutage(args.Length>1?args[1]:null);return;}
         if(args.Length>0 && args[0]=="--test-cursor") {
             using(var f=new Lecteur()) {
                 try {

@@ -34,6 +34,138 @@ def indexed_parts(text):
         offset += size
 
 
+# --- Minutage mot a mot (version 1.5) ---------------------------------------
+# Chaque phrase est synthetisee seule : son debut et sa fin dans l'audio sont
+# donc exacts. Dans la phrase, la zone parlee (sans les silences de bord) est
+# repartie entre les mots selon leur longueur ; les virgules comptent comme
+# une petite pause. Meme regle dans l'application Android (Minutage.kt).
+_PHRASE = re.compile(r'[^\S\n]*(?:[.!?…]+["»”)\]]*\s+|\n[^\S\n]*\n\s*)')
+_L = r"(?:[^\W\d_]|[\u0300-\u036f])"  # lettres, accents decomposes compris (copie de PDF)
+_MOT = re.compile(_L + r"+(?:['\u2019-]" + _L + r"+)*|\d+(?:[.,\u00a0\u202f ]\d+)*", re.UNICODE)
+
+
+def u16(texte):
+    return len(texte.encode('utf-16-le', errors='surrogatepass')) // 2
+
+
+def phrases(texte):
+    """(debut, fin) en caracteres Python des phrases contenant au moins un mot."""
+    res, debut = [], 0
+    for m in _PHRASE.finditer(texte):
+        if m.end() > debut:
+            res.append((debut, m.end()))
+            debut = m.end()
+    if debut < len(texte):
+        res.append((debut, len(texte)))
+    return [(a, b) for a, b in res if _MOT.search(texte, a, b)]
+
+
+def poids_mots(phrase):
+    """Liste (debut, fin, poids_avant, poids_mot) ; poids_avant = pause qui precede."""
+    mots, precedent = [], 0
+    for m in _MOT.finditer(phrase):
+        entre = phrase[precedent:m.start()]
+        pause = 4.0 if re.search(r'[,;:]', entre) else (2.0 if re.search(r'[–—()«»"]', entre) else 0.0)
+        lettres = len(re.findall(_L, m.group()))
+        chiffres = len(re.findall(r'\d', m.group()))
+        mots.append((m.start(), m.end(), pause if mots else 0.0, 1.0 + lettres + 3.0 * chiffres))
+        precedent = m.end()
+    return mots
+
+
+def zone_parlee(audio, sr):
+    """(premier, dernier) echantillon parle, d'apres l'energie par tranches de 10 ms."""
+    import numpy as np
+    trame = max(1, sr // 100)
+    k = len(audio) // trame
+    if k == 0:
+        return 0, len(audio)
+    x = audio[:k * trame].astype(np.float64).reshape(k, trame)
+    rms = np.sqrt((x ** 2).mean(1))
+    seuil = max(rms.max() * 10 ** (-35 / 20), 1e-9)
+    actif = np.flatnonzero(rms >= seuil)
+    if len(actif) == 0:
+        return 0, len(audio)
+    return int(actif[0]) * trame, min(len(audio), (int(actif[-1]) + 1) * trame)
+
+
+def minuter(phrase, audio, sr):
+    """Pour une phrase et son audio : [(t0, t1, debut, fin)] par mot, temps en echantillons."""
+    mots = poids_mots(phrase)
+    if not mots:
+        return []
+    a, b = zone_parlee(audio, sr)
+    total = sum(p + w for _, _, p, w in mots)
+    res, cumul = [], 0.0
+    for i, (d, f, pause, w) in enumerate(mots):
+        cumul += pause
+        t0 = a + (b - a) * cumul / total
+        cumul += w
+        t1 = a + (b - a) * cumul / total
+        res.append((int(t0) if i else 0, int(t1), d, f))
+    res[-1] = (res[-1][0], len(audio), res[-1][2], res[-1][3])
+    return res
+
+
+def debuts_alignes(voice, bouts):
+    """Debut (en echantillons) de chaque mot prononce, d'apres les durees exactes
+    fournies par la voix (seconde sortie du modele). None si indisponible."""
+    espace = voice.config.phoneme_id_map.get(' ', [None])[0]
+    muets = {i for s in ('_', '^', '$') for i in voice.config.phoneme_id_map.get(s, [])}
+    debuts, n = [], 0
+    for x in bouts:
+        ech = x.phoneme_id_samples
+        if ech is None or x.phoneme_ids is None or len(ech) != len(x.phoneme_ids):
+            return None
+        t, nouveau = 0, True
+        for i, d in zip(x.phoneme_ids, ech):
+            if i == espace:
+                nouveau = True
+            elif nouveau and i not in muets:
+                debuts.append(n + t)
+                nouveau = False
+            t += int(d)
+        n += len(x.audio_int16_bytes) // 2
+    return debuts
+
+
+def synthese_minutee(voice, passage, config):
+    """Audio int16 du passage + minutage. Positions en UTF-16 relatives au passage.
+    Mots alignes exactement quand la voix fournit ses durees, sinon estimes."""
+    import numpy as np
+    morceaux, mots, phr, n, sr = [], [], [], 0, None
+    exacts = estimes = 0
+    for a, b in phrases(passage):
+        phrase = passage[a:b]
+        bouts = list(voice.synthesize(phrase, syn_config=config, include_alignments=True))
+        if not bouts:
+            continue
+        sr = bouts[0].sample_rate
+        audio = np.concatenate([np.frombuffer(x.audio_int16_bytes, dtype=np.int16) for x in bouts])
+        base = u16(passage[:a])
+        minutage = minuter(phrase, audio, sr)
+        debuts = debuts_alignes(voice, bouts)
+        if debuts is not None and len(debuts) == len(minutage) and debuts:
+            fins = debuts[1:] + [len(audio)]
+            minutage = [(t0 if k else 0, t1, d, f) for k, (t0, t1, (_, _, d, f)) in enumerate(zip(debuts, fins, minutage))]
+            exacts += 1
+        else:
+            estimes += 1
+        for t0, t1, d, f in minutage:
+            mots.append([n + t0, n + t1, base + u16(phrase[:d]), base + u16(phrase[:f])])
+        fin_phrase = a + len(phrase.rstrip())
+        phr.append([n, n + len(audio), base, u16(passage[:fin_phrase])])
+        morceaux.append(audio)
+        n += len(audio)
+    audio = np.concatenate(morceaux) if morceaux else np.zeros(0, dtype=np.int16)
+    sr = sr or voice.config.sample_rate
+    ms = lambda v: int(round(v * 1000.0 / sr))
+    return audio, sr, {'mots': [[ms(t0), ms(t1), d, f] for t0, t1, d, f in mots],
+                       'phrases': [[ms(t0), ms(t1), d, f] for t0, t1, d, f in phr],
+                       'exactes': exacts, 'estimees': estimes}
+# ---------------------------------------------------------------------------
+
+
 ROOT = Path(__file__).resolve().parent
 VOICE = ROOT / 'voix' / 'fr_FR-siwis-medium.onnx'
 os.environ['TCL_LIBRARY'] = str(ROOT / 'tcl' / 'tcl8.6')
@@ -58,9 +190,14 @@ def synthesize(request, output, streaming=False):
             while sum(1 for _ in folder.glob('part-*.wav')) >= 3:
                 time.sleep(0.1)
             pending = folder / 'preparation.tmp'
+            pcm, sr, minutage = synthese_minutee(voice, part, config)
             with wave.open(str(pending), 'wb') as audio:
-                voice.synthesize_wav(part, audio, syn_config=config)
-            (folder / ('part-%06d.json' % count)).write_text(json.dumps({'start': start, 'end': end}), encoding='utf-8')
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(sr)
+                audio.writeframes(pcm.tobytes())
+            minutage.update({'start': start, 'end': end})
+            (folder / ('part-%06d.json' % count)).write_text(json.dumps(minutage), encoding='utf-8')
             pending.replace(folder / ('part-%06d.wav' % count))
         (folder / 'done').write_text(str(count), encoding='ascii')
     else:
