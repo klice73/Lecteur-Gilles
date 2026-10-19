@@ -96,8 +96,15 @@ class ReaderTest {
                 assertEquals("Texte non retrouvé après fermeture",original,e.text.toString())
                 assertEquals("Curseur non replacé",avant,e.selectionStart)
                 assertTrue("Reprendre inactif après réouverture",(field(a,"resume") as Button).isEnabled)
-                MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a)
+                (field(a,"resume") as Button).performClick()
+                assertTrue("Reprendre ne relance pas la lecture",field(a,"active") as Boolean)
             }
+            // la lecture reprise commence à la phrase enregistrée, pas au début du texte
+            val limite=System.currentTimeMillis()+180000
+            var premier=-1
+            while(System.currentTimeMillis()<limite && premier<0){Thread.sleep(100);scenario.onActivity{a->premier=field(a,"highlightStart") as Int}}
+            assertTrue("Reprise au mauvais endroit : $premier (attendu à partir de $avant)",premier>=avant)
+            scenario.onActivity { a -> MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a) }
         }
     }
 }

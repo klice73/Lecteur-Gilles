@@ -19,8 +19,11 @@ class Lecteur : Form {
     static readonly Color CouleurPhrase=Color.FromArgb(255,246,196), CouleurMot=Color.FromArgb(255,213,79);
     [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr fenetre, int message, IntPtr w, IntPtr l);
     // Version 1.5 : texte et position conserves dans le dossier « session » du lecteur.
+    // La position ne vaut que pour le texte dont l'empreinte est empreintePosition :
+    // recoller ou rouvrir le meme document la retrouve, un autre texte ne la detruit pas.
     int positionLecture=-1; bool texteModifie=true, chargement, positionModifiee;
-    string empreinteSauvee; DateTime derniereSauvegarde=DateTime.MinValue;
+    string empreinteSauvee, empreintePosition, empreinteTexte, empreinteLecture;
+    DateTime derniereSauvegarde=DateTime.MinValue, dernierControle=DateTime.MinValue;
     Button reprendre;
     Label statut = new Label();
     ComboBox vitesse = new ComboBox();
@@ -103,8 +106,7 @@ class Lecteur : Form {
         texte.MaxLength=int.MaxValue;
         texte.TextChanged+=delegate {
             if(changeSurlignage)return;
-            texteModifie=true;
-            if(!chargement) {positionLecture=-1;positionModifiee=true;}
+            texteModifie=true;empreinteTexte=null;
             if(audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}
         };
         voix.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Voix choisie : "+voix.Text+". Appliquée à la prochaine lecture.";};
@@ -115,7 +117,7 @@ class Lecteur : Form {
         Directory.CreateDirectory(temp); timer.Interval=50; timer.Tick+=Poll; timer.Start();
         FormClosing+=delegate { Arreter(); SauverSession(true); timer.Stop(); try {Directory.Delete(temp,true);} catch {} };
         ChargerSession();
-        Shown+=delegate { if(positionLecture>=0 && positionLecture<=texte.TextLength) {texte.Select(positionLecture,0);texte.ScrollToCaret();} };
+        Shown+=delegate { if(PositionValide()) {texte.Select(positionLecture,0);texte.ScrollToCaret();} };
     }
     // ---- Session : texte et position de lecture (version 1.5) ----
     string DossierSession { get { return Path.Combine(racine,"session"); } }
@@ -137,9 +139,9 @@ class Lecteur : Form {
             if(texteModifie || empreinteSauvee==null) {
                 string t=texte.Text;string h=Empreinte(t);
                 if(h!=empreinteSauvee) {EcrireSur(Path.Combine(DossierSession,"texte.txt"),t);empreinteSauvee=h;}
-                texteModifie=false;
+                empreinteTexte=h;texteModifie=false;
             }
-            EcrireSur(Path.Combine(DossierSession,"position.txt"),empreinteSauvee+"\n"+positionLecture+"\n"+(documentOuvert??""));
+            EcrireSur(Path.Combine(DossierSession,"position.txt"),(empreintePosition??"")+"\n"+positionLecture+"\n"+(documentOuvert??""));
             positionModifiee=false;derniereSauvegarde=DateTime.Now;
         } catch(Exception) {}
     }
@@ -150,23 +152,30 @@ class Lecteur : Form {
         try {
             string t=File.ReadAllText(fichierTexte,Encoding.UTF8);
             texte.Text=t;
-            string h=Empreinte(texte.Text);empreinteSauvee=Empreinte(t)==h?h:null;texteModifie=empreinteSauvee==null;
+            string h=Empreinte(texte.Text);empreinteSauvee=Empreinte(t)==h?h:null;texteModifie=empreinteSauvee==null;empreinteTexte=h;
             if(File.Exists(fichierPosition)) {
                 string[] l=File.ReadAllText(fichierPosition,Encoding.UTF8).Split('\n');
                 int p;
-                if(l.Length>=2 && l[0]==h && int.TryParse(l[1],out p) && p>=0 && p<texte.TextLength) positionLecture=p;
+                if(l.Length>=2 && l[0].Length>0 && int.TryParse(l[1],out p) && p>=0) {positionLecture=p;empreintePosition=l[0];}
                 if(l.Length>=3 && l[2].Trim().Length>0) {documentOuvert=l[2].Trim();Text="Piper — "+Path.GetFileName(documentOuvert);}
             }
-            statut.Text=positionLecture>=0?"Texte et position de lecture retrouvés. Cliquez sur ⟲ Reprendre où j'étais.":"Texte précédent retrouvé.";
+            statut.Text=PositionValide()?"Texte et position de lecture retrouvés. Cliquez sur ⟲ Reprendre où j'étais.":"Texte précédent retrouvé.";
         } catch(Exception) {} finally {chargement=false;}
     }
     void Reprendre() {
         if(travail!=null || audioOuvert || lectureProgressive) {statut.Text="Arrêtez la lecture en cours avant de reprendre.";return;}
-        if(positionLecture<0 || positionLecture>=texte.TextLength) {statut.Text="Aucune position de lecture enregistrée pour ce texte.";return;}
+        if(!PositionValide()) {statut.Text="Aucune position de lecture enregistrée pour ce texte.";return;}
         Demarrer(false,null,positionLecture);
     }
     void NoterPosition(int position) {
-        if(position!=positionLecture) {positionLecture=position;positionModifiee=true;}
+        if(position!=positionLecture || empreintePosition!=empreinteLecture) {positionLecture=position;empreintePosition=empreinteLecture;positionModifiee=true;}
+    }
+    string EmpreinteActuelle() {
+        if(empreinteTexte==null) {empreinteTexte=Empreinte(texte.Text);}
+        return empreinteTexte;
+    }
+    bool PositionValide() {
+        return positionLecture>=0 && positionLecture<texte.TextLength && empreintePosition!=null && empreintePosition==EmpreinteActuelle();
     }
     Button Ajouter(Control parent,string nom,Action action) {
         var b=new Button {Text=nom,AutoSize=true,Height=36,Padding=new Padding(8,3,8,3)};
@@ -274,6 +283,7 @@ class Lecteur : Form {
         string chemin=exportPath;
         if(sauver && chemin==null) using(var d=new SaveFileDialog {Filter="Audio WAV|*.wav",FileName="lecture.wav",DefaultExt="wav"}) {if(d.ShowDialog()!=DialogResult.OK)return; chemin=d.FileName;}
         Arreter(); debutLecture=depart; importation=false; destination=chemin; erreur="";
+        empreinteLecture=EmpreinteActuelle();
         var donnees=new Dictionary<string,object>(); donnees["text"]=texte.Text.Substring(depart); donnees["speed"]=double.Parse((string)vitesse.SelectedItem,System.Globalization.CultureInfo.InvariantCulture);
         donnees["voice"]=voix.SelectedIndex==0?"fr_FR-gilles-low":"fr_FR-siwis-medium";
         File.WriteAllText(Path.Combine(temp,"request.json"),new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Serialize(donnees),new System.Text.UTF8Encoding(false));
@@ -300,7 +310,8 @@ class Lecteur : Form {
     }
     void Poll(object sender,EventArgs args) {
         lireCurseur.Enabled=travail==null && !audioOuvert && !lectureProgressive;
-        reprendre.Enabled=lireCurseur.Enabled && positionLecture>=0 && positionLecture<texte.TextLength;
+        if(!lireCurseur.Enabled) reprendre.Enabled=false;
+        else if((DateTime.Now-dernierControle).TotalMilliseconds>=500) {dernierControle=DateTime.Now;reprendre.Enabled=PositionValide();}
         SauverSession(false);
         if(lectureProgressive) {PollLecture();return;}
         if(travail==null) {
@@ -364,13 +375,15 @@ class Lecteur : Form {
     static int TesterMinutage(string jsonPython) {
         string racine=AppDomain.CurrentDomain.BaseDirectory,session=Path.Combine(racine,"session"),copie=session+"-avant-test";
         string rapport=Path.Combine(racine,"verification-minutage.txt");
+        bool existait=true,deplace=false;
         try {
-            if(Directory.Exists(copie))Directory.Delete(copie,true);
-            if(Directory.Exists(session))Directory.Move(session,copie);
+            if(Directory.Exists(copie))throw new Exception("Un dossier "+copie+" existe deja (test precedent interrompu) : le remettre a la place de « session » avant de relancer le test. Rien n'a ete modifie.");
+            existait=Directory.Exists(session);
+            if(existait) {Directory.Move(session,copie);deplace=true;}
             string t="Première phrase ici, 😀 bien sûr. Deuxième phrase là.";
             using(var f=new Lecteur()) {
                 f.Opacity=0;f.ShowInTaskbar=false;f.Show();Application.DoEvents();
-                f.texte.Text=t;f.debutLecture=0;f.passageDebut=0;
+                f.texte.Text=t;f.debutLecture=0;f.passageDebut=0;f.empreinteLecture=f.EmpreinteActuelle();
                 int i2=t.IndexOf("ici"),iE=t.IndexOf("😀"),iB=t.IndexOf("bien"),iD=t.IndexOf("Deuxième");
                 f.minuteMots=new int[][]{new[]{0,300,0,8},new[]{300,600,9,15},new[]{600,800,i2,i2+3},new[]{800,1000,iB,iB+4},new[]{1000,1300,iD,iD+8},new[]{1300,1600,iD+9,iD+16},new[]{1600,2000,iD+17,iD+19}};
                 f.minutePhrases=new int[][]{new[]{0,1000,0,iD-1},new[]{1000,2000,iD,t.Length}};
@@ -395,8 +408,16 @@ class Lecteur : Form {
             using(var g=new Lecteur()) {
                 if(g.texte.Text!=t)throw new Exception("Texte non retrouve a la reouverture");
                 if(g.positionLecture!=t.IndexOf("Deuxième"))throw new Exception("Position non retrouvee : "+g.positionLecture);
-                g.Poll(null,EventArgs.Empty);if(!g.reprendre.Enabled)throw new Exception("Bouton Reprendre inactif");
-                g.texte.Text="Autre texte colle.";if(g.positionLecture!=-1)throw new Exception("Position d'un autre texte conservee");
+                g.Opacity=0;g.ShowInTaskbar=false;g.Show();Application.DoEvents();   // affichage : la position doit survivre
+                g.dernierControle=DateTime.MinValue;g.Poll(null,EventArgs.Empty);if(!g.reprendre.Enabled)throw new Exception("Bouton Reprendre inactif apres affichage");
+                g.texte.Text="Autre texte colle.";g.dernierControle=DateTime.MinValue;g.Poll(null,EventArgs.Empty);
+                if(g.PositionValide() || g.reprendre.Enabled)throw new Exception("Position offerte pour un autre texte");
+                g.texte.Text=t;g.dernierControle=DateTime.MinValue;g.Poll(null,EventArgs.Empty);
+                if(!g.PositionValide() || !g.reprendre.Enabled)throw new Exception("Position perdue apres avoir recolle le meme texte");
+                g.SauverSession(true);
+            }
+            using(var h=new Lecteur()) {
+                if(!h.PositionValide())throw new Exception("Position perdue sur le disque apres un autre texte puis le meme");
             }
             string extra="";
             if(jsonPython!=null) {
@@ -406,11 +427,12 @@ class Lecteur : Form {
                 for(int k=1;k<mots.Length;k++)if(mots[k][0]<mots[k-1][0])throw new Exception("Minutage Python non croissant");
                 extra=" Minutage produit par lecteur.py lu : "+mots.Length+" mots, "+phr.Length+" phrases, "+d["exactes"]+" phrases alignees exactement.";
             }
-            File.WriteAllText(rapport,"Reussi : surlignage mot et phrase selon le temps audio (y compris apres un emoji), effacement, retour en arriere, texte intact ; texte et position retrouves a la reouverture ; bouton Reprendre ; position annulee pour un autre texte."+extra+" "+DateTime.Now.ToString("s"));
+            File.WriteAllText(rapport,"Reussi : surlignage mot et phrase selon le temps audio (y compris apres un emoji), effacement, retour en arriere, texte intact ; texte et position retrouves a la reouverture, y compris apres affichage de la fenetre ; bouton Reprendre ; position non offerte pour un autre texte et retrouvee en recollant le meme."+extra+" "+DateTime.Now.ToString("s"));
             return 0;
         } catch(Exception e) {File.WriteAllText(rapport,"ECHEC : "+e);return 1;}
         finally {
-            try {if(Directory.Exists(session))Directory.Delete(session,true);if(Directory.Exists(copie))Directory.Move(copie,session);} catch {}
+            // ne toucher a « session » que si c'est celle du test (originale mise de cote, ou absente au depart)
+            try {if(deplace || !existait) {if(Directory.Exists(session))Directory.Delete(session,true);if(deplace)Directory.Move(copie,session);}} catch {}
         }
     }
     [STAThread] static void Main(string[] args) {

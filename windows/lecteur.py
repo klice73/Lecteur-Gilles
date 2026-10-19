@@ -60,15 +60,38 @@ def phrases(texte):
     return [(a, b) for a, b in res if _MOT.search(texte, a, b)]
 
 
+_VOY = 'aeiouy\u00e0\u00e2\u00e4\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f6\u00f9\u00fb\u00fc\u0153\u00e6'
+_GROUPES = ('eau', 'ou', 'au', 'ai', 'ei', 'oi', 'ch', 'ph', 'gn', 'qu', 'll', 'ss', 'tt', 'nn', 'mm', 'rr', 'pp')
+
+
+def sons(mot):
+    """Nombre approximatif de sons d'un mot francais ecrit (lettres muettes et
+    groupes comme « eau », « ch », voyelles nasales). Sert a estimer la duree."""
+    import unicodedata
+    w = unicodedata.normalize('NFC', mot).lower()
+    if re.fullmatch(r'\d[\d .,\u00a0\u202f]*', w):
+        return 3.0 * len(re.findall(r'\d', w))
+    w = re.sub(r"^[^\W\d_]['\u2019]", '', w)
+    w = re.sub(r"['\u2019-]", '', w)
+    if len(w) > 3:
+        w = re.sub(r'(ent|es|s|x)$', '', w)
+    if len(w) > 2:
+        w = re.sub(r'e$', '', w)
+    w = re.sub('(?<=[' + _VOY + '])[tdzp]$', '', w)
+    for g in _GROUPES:
+        w = w.replace(g, '#')
+    w = re.sub('(?<=[' + _VOY + '])[nm](?=[^' + _VOY + ']|$)', '', w)
+    w = w.replace('h', '')
+    return float(max(1, len(w)))
+
+
 def poids_mots(phrase):
-    """Liste (debut, fin, poids_avant, poids_mot) ; poids_avant = pause qui precede."""
+    """Liste (debut, fin, pause_avant, poids_mot) ; pause_avant = pause de ponctuation qui precede."""
     mots, precedent = [], 0
     for m in _MOT.finditer(phrase):
         entre = phrase[precedent:m.start()]
-        pause = 4.0 if re.search(r'[,;:]', entre) else (2.0 if re.search(r'[–—()«»"]', entre) else 0.0)
-        lettres = len(re.findall(_L, m.group()))
-        chiffres = len(re.findall(r'\d', m.group()))
-        mots.append((m.start(), m.end(), pause if mots else 0.0, 1.0 + lettres + 3.0 * chiffres))
+        pause = 6.0 if re.search(r'[,;:]', entre) else (2.0 if re.search('[\u2013\u2014()\u00ab\u00bb"]', entre) else 0.0)
+        mots.append((m.start(), m.end(), pause if mots else 0.0, 1.0 + sons(m.group())))
         precedent = m.end()
     return mots
 
@@ -89,21 +112,67 @@ def zone_parlee(audio, sr):
     return int(actif[0]) * trame, min(len(audio), (int(actif[-1]) + 1) * trame)
 
 
+def _energie(audio, sr):
+    import numpy as np
+    trame = max(1, sr // 100)
+    k = len(audio) // trame
+    x = audio[:k * trame].astype(np.float64).reshape(k, trame)
+    return np.sqrt((x ** 2).mean(1)), trame
+
+
 def minuter(phrase, audio, sr):
-    """Pour une phrase et son audio : [(t0, t1, debut, fin)] par mot, temps en echantillons."""
+    """Pour une phrase et son audio : [(t0, t1, debut, fin)] par mot, temps en echantillons.
+    Estimation (quand la voix ne donne pas ses durees) : la zone parlee est repartie
+    selon le nombre de sons des mots ; chaque pause de ponctuation est ancree sur le
+    vrai silence le plus proche dans l'audio (au moins 80 ms sous -30 dB)."""
     mots = poids_mots(phrase)
     if not mots:
         return []
     a, b = zone_parlee(audio, sr)
-    total = sum(p + w for _, _, p, w in mots)
-    res, cumul = [], 0.0
-    for i, (d, f, pause, w) in enumerate(mots):
-        cumul += pause
-        t0 = a + (b - a) * cumul / total
+    rms, trame = _energie(audio, sr)
+    silences = []
+    if len(rms):
+        muet = rms < rms.max() * 10 ** (-30 / 20)
+        i, fin = a // trame, b // trame
+        while i < fin:
+            if muet[i]:
+                j = i
+                while j < fin and muet[j]:
+                    j += 1
+                if j - i >= 8 and j < fin:
+                    silences.append(((i + j) / 2.0 * trame, j * trame))   # (centre, fin) en echantillons
+                i = j
+            else:
+                i += 1
+    debut_poids, cumul = [], 0.0
+    for _, _, p, w in mots:
+        cumul += p
+        debut_poids.append(cumul)
         cumul += w
-        t1 = a + (b - a) * cumul / total
-        res.append((int(t0) if i else 0, int(t1), d, f))
-    res[-1] = (res[-1][0], len(audio), res[-1][2], res[-1][3])
+    total = cumul
+    est = [a + (b - a) * s / total for s in debut_poids]
+    ancres = [(0, float(a), 0.0)]
+    for k in range(1, len(mots)):
+        if mots[k][2] > 0 and silences:
+            j = min(range(len(silences)), key=lambda q: abs(silences[q][0] - est[k]))
+            if abs(silences[j][0] - est[k]) < 0.25 * (b - a):
+                ancres.append((k, float(silences[j][1]), debut_poids[k]))
+                centre = silences[j][0]
+                silences = [s for s in silences if s[0] > centre]
+    ancres.append((len(mots), float(b), total))
+    for (k0, t0, s0), (k1, t1, s1) in zip(ancres, ancres[1:]):
+        fin_poids = debut_poids[k1 - 1] + mots[k1 - 1][3]
+        if k1 <= k0 or t1 <= t0 or fin_poids <= s0:
+            continue
+        for k in range(k0, k1):
+            est[k] = t0 + (t1 - t0) * (debut_poids[k] - s0) / (fin_poids - s0)
+    for k in range(1, len(est)):
+        est[k] = max(est[k], est[k - 1])
+    res = []
+    for k, (d, f, _, _) in enumerate(mots):
+        t0 = 0 if k == 0 else int(est[k])
+        t1 = len(audio) if k == len(mots) - 1 else int(est[k + 1])
+        res.append((t0, t1, d, f))
     return res
 
 
@@ -129,6 +198,29 @@ def debuts_alignes(voice, bouts):
     return debuts
 
 
+def _premier_son(phonemes):
+    for c in phonemes:
+        if c.isalpha() and c not in 'ˈˌː':  # accents toniques et allongement : pas des sons
+            return c
+    return ''
+
+
+def correspondance_sure(voice, phrase, mots, bouts):
+    """Les mots du texte et les mots phonetiques vont-ils bien un a un ?
+    Controle : chaque mot lu seul doit commencer par le meme son que le mot
+    phonetique associe (sinon espeak a fusionne ou ajoute des mots, ex. « 50 % »)."""
+    phon = []
+    for x in bouts:
+        phon += [w for w in ''.join(x.phonemes or []).split(' ') if any(c.isalpha() for c in w)]
+    if len(phon) != len(mots):
+        return False
+    for (d, f, _, _), w in zip(mots, phon):
+        seul = [m for s in voice.phonemize(phrase[d:f]) for m in ''.join(s).split(' ') if any(c.isalpha() for c in m)]
+        if not seul or _premier_son(seul[0]) != _premier_son(w):
+            return False
+    return True
+
+
 def synthese_minutee(voice, passage, config):
     """Audio int16 du passage + minutage. Positions en UTF-16 relatives au passage.
     Mots alignes exactement quand la voix fournit ses durees, sinon estimes."""
@@ -145,7 +237,8 @@ def synthese_minutee(voice, passage, config):
         base = u16(passage[:a])
         minutage = minuter(phrase, audio, sr)
         debuts = debuts_alignes(voice, bouts)
-        if debuts is not None and len(debuts) == len(minutage) and debuts:
+        if (debuts is not None and len(debuts) == len(minutage) and debuts
+                and correspondance_sure(voice, phrase, poids_mots(phrase), bouts)):
             fins = debuts[1:] + [len(audio)]
             minutage = [(t0 if k else 0, t1, d, f) for k, (t0, t1, (_, _, d, f)) in enumerate(zip(debuts, fins, minutage))]
             exacts += 1

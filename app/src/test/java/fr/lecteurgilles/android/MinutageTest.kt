@@ -11,7 +11,7 @@ class MinutageTest {
         assertEquals(listOf("Bonjour, Gilles.","Ceci est un test !","Titre\nSuite de 1 250 mots, c’est-à-dire peu.","😀 fin"),p)
         val m=Minutage.poidsMots("Suite de 1 250 mots, c’est-à-dire peu.")
         assertEquals(listOf("Suite","de","1 250","mots","c’est-à-dire","peu"),m.map{"Suite de 1 250 mots, c’est-à-dire peu.".substring(it.debut,it.fin)})
-        assertEquals(4.0,m[4].pause,0.0)   // virgule avant « c’est-à-dire »
+        assertEquals(6.0,m[4].pause,0.0)   // virgule avant « c’est-à-dire »
     }
     @Test fun minutageDansLaZoneParlee() {
         val sr=16000

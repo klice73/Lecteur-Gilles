@@ -150,7 +150,7 @@ class MainActivity : Activity() {
             textSize=18f; gravity=android.view.Gravity.TOP
             inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setHorizontallyScrolling(false)
-            setText(state?.getString("text") ?: loadText() ?: getPreferences(MODE_PRIVATE).getString("text","Bonjour ! Je suis Gilles. Collez votre texte, puis appuyez sur Lire."))
+            setText(loadText() ?: getPreferences(MODE_PRIVATE).getString("text","Bonjour ! Je suis Gilles. Collez votre texte, puis appuyez sur Lire."))
         }
         layout.addView(editor,LinearLayout.LayoutParams(-1,0,1f))
         val controls=LinearLayout(this)
@@ -230,22 +230,39 @@ class MainActivity : Activity() {
                 if(!paused)output.play()
                 var frames=0L
                 val parts=TextChunks.ranges(text)
-                for((index,part) in parts.withIndex()){
-                    if(id!=generation.get())break
-                    while(paused && id==generation.get())Thread.sleep(40)
-                    if(id!=generation.get())break
-                    ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
-                    // Version 1.5 : phrase par phrase, chaque mot minuté (surlignage mot à mot)
-                    for(r in Minutage.phrases(part.text)){
-                        if(id!=generation.get())break
-                        val phrase=part.text.substring(r.first,r.last+1)
-                        val audio=tts.generateWithCallback(phrase,0,rate){if(id==generation.get())1 else 0}
-                        val samples=audio.samples
-                        if(id!=generation.get() || samples.isEmpty())continue
-                        val debutPhrase=baseOffset+part.start+r.first
-                        val finPhrase=debutPhrase+phrase.trimEnd().length
-                        for(m in Minutage.minuter(phrase,samples,sampleRate))
-                            spokenSpans.add(SpokenSpan(id,frames+m.t0,frames+m.t1,debutPhrase+m.debut,debutPhrase+m.fin,debutPhrase,finPhrase))
+                // Version 1.5 : une file prépare les phrases suivantes pendant que la phrase en cours est jouée
+                // (pas de silence entre les phrases sur un téléphone lent). Seule elle utilise le moteur.
+                class Phrase(val samples:FloatArray,val mots:List<Minutage.Temps>,val debut:Int,val fin:Int)
+                val fin=Phrase(FloatArray(0),emptyList(),-1,-1)
+                val file=java.util.concurrent.ArrayBlockingQueue<Phrase>(4)
+                var erreurPreparation:Exception?=null
+                val arret=java.util.concurrent.atomic.AtomicBoolean(false)   // la lecture s'arrête : la préparation aussi
+                fun continuer()=id==generation.get() && !arret.get()
+                val preparation=Thread {
+                    try {
+                        for((index,part) in parts.withIndex()){
+                            if(!continuer())break
+                            ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
+                            for(r in Minutage.phrases(part.text)){
+                                if(!continuer())break
+                                val phrase=part.text.substring(r.first,r.last+1)
+                                val audio=tts.generateWithCallback(phrase,0,rate){if(continuer())1 else 0}
+                                if(!continuer() || audio.samples.isEmpty())continue
+                                val debutPhrase=baseOffset+part.start+r.first
+                                val item=Phrase(audio.samples,Minutage.minuter(phrase,audio.samples,sampleRate),debutPhrase,debutPhrase+phrase.trimEnd().length)
+                                while(continuer() && !file.offer(item,50,java.util.concurrent.TimeUnit.MILLISECONDS)){}
+                            }
+                        }
+                    } catch(e:Exception){erreurPreparation=e}
+                    finally { while(continuer() && !file.offer(fin,50,java.util.concurrent.TimeUnit.MILLISECONDS)){} }
+                }
+                preparation.start()
+                try {
+                    while(id==generation.get()){
+                        val ph=file.poll(50,java.util.concurrent.TimeUnit.MILLISECONDS)?:continue
+                        if(ph===fin)break
+                        val samples=ph.samples
+                        for(m in ph.mots)spokenSpans.add(SpokenSpan(id,frames+m.t0,frames+m.t1,ph.debut+m.debut,ph.debut+m.fin,ph.debut,ph.fin))
                         var offset=0
                         while(offset<samples.size && id==generation.get()){
                             if(paused){Thread.sleep(30);continue}
@@ -255,7 +272,11 @@ class MainActivity : Activity() {
                             if(written==0)Thread.sleep(10)
                         }
                     }
+                } finally {
+                    arret.set(true)          // erreur d'écriture ou arrêt : la préparation s'interrompt
+                    preparation.join()       // le moteur n'est jamais libéré pendant une préparation
                 }
+                erreurPreparation?.let{throw it}
                 while(id==generation.get() && (output.playbackHeadPosition.toLong() and 0xffffffffL)<frames)Thread.sleep(40)
                 finished=id==generation.get()
             } catch(e:Exception){if(id==generation.get())message("Lecture impossible : ${e.message}")}
@@ -310,7 +331,7 @@ class MainActivity : Activity() {
         if(text.isBlank())throw IllegalArgumentException("Aucun texte. Un PDF scanné nécessite un OCR.")
         return text
     }
-    override fun onSaveInstanceState(out:Bundle){out.putString("text",editor.text.toString());super.onSaveInstanceState(out)}
+    override fun onSaveInstanceState(out:Bundle){if(!active)saveText();super.onSaveInstanceState(out)} // texte dans le fichier privé, pas dans le Bundle (limite ~1 Mo)
     override fun onStop(){pauseReading();savePosition();if(!active)saveText();super.onStop()}
     override fun onDestroy(){try{unregisterReceiver(noisy)}catch(_:Exception){};savePosition();destroyed=true;highlightHandler.removeCallbacks(highlightTick);stopReading();worker.execute{engine?.release();engine=null};worker.shutdown();super.onDestroy()}
 }

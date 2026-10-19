@@ -27,7 +27,8 @@ Ou est garde le texte ?
   la memoire de lecture.
 
 Limites connues
-  - Avec la voix Siwis, le surlignage des mots est estime (la phrase reste exacte).
+  - Avec la voix Siwis, le surlignage des mots est estime (la phrase reste exacte) :
+    le bon mot environ 3 fois sur 4, sinon son voisin.
   - Les nombres ecrits en chiffres (ex. « 1 250 ») peuvent rendre la phrase estimee
     plutot qu'exacte : le mot surligne peut alors avoir un mot d'avance ou de retard.
   - Ne pas relancer prepare_voices.py : il remettrait la voix d'origine (bredouillement).
