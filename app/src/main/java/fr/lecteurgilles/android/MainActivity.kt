@@ -176,12 +176,19 @@ class MainActivity : Activity() {
                     while(paused && id==generation.get())Thread.sleep(40)
                     if(id!=generation.get())break
                     ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
-                    val audio=tts.generateWithCallback(part.text,0,rate){if(id==generation.get())1 else 0}
-                    if(id==generation.get() && audio.samples.isNotEmpty())spokenSpans.add(SpokenSpan(id,frames,frames+audio.samples.size,baseOffset+part.start,baseOffset+part.end))
+                    // Anti-charabia 1.4 : phrases courtes regroupées, charabia final coupé.
+                    val morceaux=ArrayList<FloatArray>()
+                    for(groupe in Anticharabia.regrouper(part.text)){
+                        if(id!=generation.get())break
+                        val brut=tts.generateWithCallback(groupe,0,rate){if(id==generation.get())1 else 0}
+                        if(brut.samples.isNotEmpty())morceaux.add(Anticharabia.couper(brut.samples,sampleRate,groupe,1f/rate))
+                    }
+                    val samples=FloatArray(morceaux.sumOf{it.size}).also{all->var at=0;for(m in morceaux){m.copyInto(all,at);at+=m.size}}
+                    if(id==generation.get() && samples.isNotEmpty())spokenSpans.add(SpokenSpan(id,frames,frames+samples.size,baseOffset+part.start,baseOffset+part.end))
                     var offset=0
-                    while(offset<audio.samples.size && id==generation.get()){
+                    while(offset<samples.size && id==generation.get()){
                         if(paused){Thread.sleep(30);continue}
-                        val written=output.write(audio.samples,offset,minOf(4096,audio.samples.size-offset),AudioTrack.WRITE_NON_BLOCKING)
+                        val written=output.write(samples,offset,minOf(4096,samples.size-offset),AudioTrack.WRITE_NON_BLOCKING)
                         if(written<0)throw IllegalStateException("Erreur audio $written")
                         offset+=written;frames+=written
                         if(written==0)Thread.sleep(10)
