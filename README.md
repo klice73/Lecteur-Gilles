@@ -17,7 +17,7 @@ Il s'agit d'une version de test signée avec une clé de développement. Les ver
 - La pause conserve la position du flux audio. Aucun remplacement par la voix Android.
 - Réglez la vitesse avant la lecture. Les longs textes sont traités par passages.
 - La lecture se met en pause en arrière-plan ou en cas de perte du focus audio.
-- Version 1.4 (Android et Windows) : correction du bredouillement (« charabia ») avant certains passages. La voix Gilles continue à produire des sons après une phrase de moins de 7 mots (titre, numéro de page, « Oui. »). Ces phrases sont désormais rattachées à la suivante pour le moteur seulement, et un audio anormalement long est coupé au premier silence. Le texte affiché ne change pas.
+- Version 1.4 (Android et Windows) : correction du bredouillement (« ble ble ») avant ou après certains passages. Cause mesurée : le modèle Gilles attribue parfois plusieurs secondes à des jetons sans son (début, silence, fin), surtout sur les phrases courtes. Le modèle est corrigé en plafonnant ces durées (`plafonner_voix.py`) ; le texte, les phonèmes et la voix ne changent pas. Windows : remplacer `voix/fr_FR-gilles-low.onnx` par le fichier publié avec la version.
 
 Gilles et le moteur sont intégrés à l'APK. L'application ne demande aucune permission Internet et n'envoie pas de documents à un serveur. Le dernier texte (jusqu'à 100 000 caractères) reste enregistré localement pour la réouverture.
 

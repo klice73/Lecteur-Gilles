@@ -26,4 +26,11 @@ actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in [aar,archive]
 if lock.exists():
     if json.loads(lock.read_text())!=actual: raise RuntimeError('La somme de contrôle des composants a changé')
 else:lock.write_text(json.dumps(actual,indent=2)+'\n')
+# Version 1.4 : plafonner les durées aberrantes du modèle (cause du « charabia »).
+# Voir plafonner_voix.py. Nécessite le paquet Python onnx.
+import sys
+sys.path.insert(0,str(ROOT))
+from plafonner_voix import plafonner
+modele=assets/'vits-piper-fr_FR-gilles-low'/'fr_FR-gilles-low.onnx'
+print('Voix :',plafonner(str(modele),str(modele)),flush=True)
 print('Gilles et moteur prêts.',flush=True)

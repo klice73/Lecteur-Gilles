@@ -25,3 +25,7 @@ Cliquez dans le texte puis sur « Lire à partir du curseur » pour commencer à
 Validation exécutée sur la version locale : compilation C#, lecture réelle depuis curseur/sélection, exclusion du préambule dans la requête, document intact, pause/reprise, fin de texte et lecture complète ; import et lecture progressive du PDF synthétique de 300 pages. La réinstallation intégrale depuis Internet et la reconstruction de toutes les bibliothèques natives restent à vérifier séparément (voir legal/AUDIT.md).
 
 Le surlignage jaune suit le passage audio joué ; il reste fixe en pause, avance au passage suivant et disparaît à l’arrêt ou en fin de lecture. Le texte est conservé.
+
+## Version 1.4 : voix Gilles plafonnée
+
+Télécharger `fr_FR-gilles-low.onnx` dans la version publiée sur GitHub (Releases) et remplacer `voix\fr_FR-gilles-low.onnx`. Ce fichier corrige le bredouillement. Il diffère du fichier de Hugging Face : ne pas relancer `prepare_voices.py` ensuite (la somme de contrôle ne correspondrait plus). Pour plafonner un modèle soi-même : `python plafonner_voix.py entree.onnx sortie.onnx` (paquet `onnx` requis).

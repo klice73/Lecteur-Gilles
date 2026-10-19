@@ -27,8 +27,10 @@ jobs:
           gradle-version: '8.11.1'
       - name: Préparer la voix Gilles et le moteur natif
         run: |
+          python -m pip install --quiet onnx==1.23.2
           python prepare.py
           python legal/prepare_notices.py
+          python -c "import onnx;m=onnx.load('app/src/main/assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx');assert any(p.key=='lecteur_gilles_plafond_durees' for p in m.metadata_props),'voix non plafonnee';print('Voix plafonnee verifiee')"
       - name: Compiler, tester et vérifier Android
         run: |
           gradle assembleDebug testDebugUnitTest lintDebug --no-daemon --console=plain
@@ -90,7 +92,14 @@ jobs:
       - name: Préparer les sources identifiées et licences
         run: python legal/package_sources.py
       - name: Préparer APK installable
-        run: cp app/build/outputs/apk/debug/app-debug.apk Lecteur-Gilles-Android.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Lecteur-Gilles-Android.apk
+          # verifier que la voix livree dans l'APK est bien la voix plafonnee
+          unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx > voix-apk.onnx
+          python -c "import onnx;m=onnx.load('voix-apk.onnx');assert any(p.key=='lecteur_gilles_plafond_durees' for p in m.metadata_props),'APK sans voix plafonnee';print('APK : voix plafonnee')"
+          # meme voix pour le lecteur Windows (a placer dans le dossier voix)
+          cp voix-apk.onnx fr_FR-gilles-low.onnx
+          sha256sum fr_FR-gilles-low.onnx Lecteur-Gilles-Android.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Lecteur-Gilles-Android
@@ -106,4 +115,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "APK de test signé : voix Gilles incluse, lecture locale. Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "APK de test signé : voix Gilles incluse (durées plafonnées contre le bredouillement), lecture locale. Windows : remplacer voix/fr_FR-gilles-low.onnx par le fichier du même nom publié ici. Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."

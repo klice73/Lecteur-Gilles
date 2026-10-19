@@ -24,95 +24,6 @@ def text_parts(text, limit=800):
         yield text[offset:end]
         offset = end
 
-# --- Anti-charabia (version 1.4, 19 octobre 2026) ---------------------------
-# Mesure : la voix Gilles (fr_FR-gilles-low) continue souvent a « parler »
-# apres une phrase de moins de 7 mots (titre, numero de page, « Oui. »).
-# 1) regrouper : une phrase trop courte est rattachee a la suivante (son point
-#    devient une virgule). Seul le texte envoye au moteur change.
-# 2) couper : si l'audio depasse nettement la duree attendue, il est coupe au
-#    premier silence, la ou le charabia commence.
-MOTS_MIN = 7
-_FIN = re.compile('(?<=[.!?…])["»”)\\]]*\\s+')
-_POINT_FINAL = re.compile('[.!?…]+(["»”)\\]]*)$')
-_POINTS = re.compile('(?:\\s*[.…·_]){3,}\\s*')
-_TITRE = re.compile('(?<=[^\\s.!?,;:…])[ \\t]*\\n[ \\t]*\\n\\s*')
-_MOT = re.compile("[^\\W\\d_]+(?:['’-][^\\W\\d_]+)*|\\d+")
-
-
-def mots(texte):
-    return len(_MOT.findall(texte))
-
-
-def lettres(texte):
-    return len(re.findall(r'[^\W\d_]', texte)) + 3 * len(re.findall(r'\d', texte))
-
-
-def regrouper(texte):
-    texte = _TITRE.sub(', ', _POINTS.sub(', ', texte))
-    phrases = [p.strip() for p in _FIN.split(texte) if p.strip()]
-    groupes, courant = [], ''
-    for p in phrases:
-        if not courant:
-            courant = p
-        elif mots(courant) < MOTS_MIN:
-            courant = _POINT_FINAL.sub(r',\1', courant) + ' ' + p
-        else:
-            groupes.append(courant)
-            courant = p
-    if courant:
-        if groupes and mots(courant) < MOTS_MIN:
-            groupes[-1] = _POINT_FINAL.sub(r',\1', groupes[-1]) + ' ' + courant
-        else:
-            groupes.append(courant)
-    return groupes
-
-
-def couper(audio, sr, texte, lent=1.0):
-    import numpy as np
-    n = len(audio)
-    limite = (0.8 + 0.13 * lettres(texte)) * lent
-    if n <= limite * sr:
-        return audio
-    trame = max(1, int(0.02 * sr))
-    k = n // trame
-    if k == 0:
-        return audio
-    x = audio[:k * trame].astype(np.float64).reshape(k, trame)
-    rms = np.sqrt((x ** 2).mean(1)) + 1e-9
-    muet = rms < np.percentile(rms, 90) * 10 ** (-30 / 20)
-    parle = np.flatnonzero(~muet)
-    premier = int(parle[0]) if len(parle) else 0
-    i = premier + int(max(0.6 * 0.065 * lettres(texte) * lent, 0.35) / 0.02)
-    while i < k:
-        if muet[i]:
-            j = i
-            while j < k and muet[j]:
-                j += 1
-            if j - i >= int(0.25 / 0.02) and j < k:
-                return audio[:(i + int(0.12 / 0.02)) * trame]
-            i = j
-        else:
-            i += 1
-    out = audio[:int(limite * sr)].copy()
-    f = min(len(out), int(0.03 * sr))
-    if f:
-        out[-f:] = (out[-f:].astype(np.float64) * np.linspace(1, 0, f)).astype(audio.dtype)
-    return out
-
-
-def voix_propre(voice, part, config):
-    """Produit (premier morceau Piper, PCM int16) par groupe, sans charabia."""
-    import numpy as np
-    lent = getattr(config, 'length_scale', None) or 1.0
-    for groupe in regrouper(part):
-        morceaux = list(voice.synthesize(groupe, syn_config=config))
-        if not morceaux:
-            continue
-        audio = np.concatenate([np.frombuffer(m.audio_int16_bytes, dtype=np.int16) for m in morceaux])
-        yield morceaux[0], couper(audio, morceaux[0].sample_rate, groupe, lent).tobytes()
-# ---------------------------------------------------------------------------
-
-
 def indexed_parts(text):
     """Offsets use UTF-16 code units, matching Windows controls (including emoji)."""
     offset = 0
@@ -148,18 +59,7 @@ def synthesize(request, output, streaming=False):
                 time.sleep(0.1)
             pending = folder / 'preparation.tmp'
             with wave.open(str(pending), 'wb') as audio:
-                initialized = False
-                for chunk, pcm in voix_propre(voice, part, config):
-                    if not initialized:
-                        audio.setframerate(chunk.sample_rate)
-                        audio.setsampwidth(chunk.sample_width)
-                        audio.setnchannels(chunk.sample_channels)
-                        initialized = True
-                    audio.writeframes(pcm)
-                if not initialized:  # passage sans texte prononcable : WAV vide valide
-                    audio.setframerate(voice.config.sample_rate)
-                    audio.setsampwidth(2)
-                    audio.setnchannels(1)
+                voice.synthesize_wav(part, audio, syn_config=config)
             (folder / ('part-%06d.json' % count)).write_text(json.dumps({'start': start, 'end': end}), encoding='utf-8')
             pending.replace(folder / ('part-%06d.wav' % count))
         (folder / 'done').write_text(str(count), encoding='ascii')
@@ -168,12 +68,13 @@ def synthesize(request, output, streaming=False):
         with wave.open(str(output), 'wb') as audio:
             initialized = False
             for part in parts:
-                for chunk, pcm in voix_propre(voice, part, config):
+                for chunk in voice.synthesize(part, syn_config=config):
                     if not initialized:
                         audio.setframerate(chunk.sample_rate)
                         audio.setsampwidth(chunk.sample_width)
                         audio.setnchannels(chunk.sample_channels)
                         initialized = True
+                    pcm = chunk.audio_int16_bytes
                     if audio.getnframes() * audio.getnchannels() * audio.getsampwidth() + len(pcm) > 4_000_000_000:
                         raise ValueError('Limite WAV atteinte. Exportez le livre en plusieurs parties.')
                     audio.writeframes(pcm)
