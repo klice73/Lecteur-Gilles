@@ -1,0 +1,22 @@
+[
+  {
+    "file": "fr_FR-gilles-low.onnx",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx",
+    "sha256": "5cd711846720e261c2a176f6924c198a7424d0a75dd4b0a5357a5fb9cb739285"
+  },
+  {
+    "file": "fr_FR-gilles-low.onnx.json",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/gilles/low/fr_FR-gilles-low.onnx.json",
+    "sha256": "5a47cc0789e91267d17666bbec842dd92950669271a09023eb6970ee364cf88a"
+  },
+  {
+    "file": "fr_FR-siwis-medium.onnx",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx",
+    "sha256": "641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99"
+  },
+  {
+    "file": "fr_FR-siwis-medium.onnx.json",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json",
+    "sha256": "39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959"
+  }
+]

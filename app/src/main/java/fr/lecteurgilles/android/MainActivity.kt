@@ -24,6 +24,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var play: Button
     private lateinit var pause: Button
+    private lateinit var playFromCursor: Button
     private lateinit var speed: Spinner
     private val worker = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger()
@@ -66,20 +67,32 @@ class MainActivity : Activity() {
         }
         layout.addView(editor,LinearLayout.LayoutParams(-1,0,1f))
         val controls=LinearLayout(this)
-        play=button("▶ Lire") { if(active && paused) resumeReading() else if(!active) startReading() }
+        play=button("▶ Lire tout") { if(active && paused) resumeReading() else if(!active) startReading() }
         pause=button("Ⅱ Pause") {pauseReading()}.apply {isEnabled=false}
         controls.addView(play,LinearLayout.LayoutParams(0,dp(60),1f));controls.addView(pause,LinearLayout.LayoutParams(0,dp(60),1f))
         controls.addView(button("■ Arrêter") {stopReading()},LinearLayout.LayoutParams(0,dp(60),1f))
         layout.addView(controls)
+        playFromCursor=button("▶ Lire à partir du curseur") {startReading(true)}
+        layout.addView(playFromCursor)
+        layout.addView(TextView(this).apply {text="Touchez le texte pour placer le curseur. Une sélection commence à son début ; la lecture continue jusqu’à la fin.";textSize=12f})
         status=TextView(this).apply {text="Prêt. La première préparation peut prendre un moment.";textSize=14f;setPadding(0,12,0,8)}
         layout.addView(status)
-        layout.addView(button("À propos et licences") {AlertDialog.Builder(this).setTitle("Lecteur Gilles 1.0").setMessage("Application locale, sans accès Internet.\n\nVoix Piper Gilles : français de France, source CC0.\nMoteur Sherpa-ONNX : Apache-2.0.\nPhonétisation eSpeak NG : GPL-3.0.\nApplication distribuée sous GPL-3.0.\n\nSources : github.com/klice73/Lecteur-Gilles\n\nLes PDF scannés nécessitent un OCR non inclus. La lecture se met en pause quand l’application passe en arrière-plan.").setPositiveButton("Fermer",null).show()})
+        layout.addView(button("À propos et licences") {showLicenses()})
         setContentView(layout)
+    }
+    private fun showLicenses(){
+        val names=(assets.list("licenses")?:emptyArray()).sorted()
+        AlertDialog.Builder(this).setTitle("Gilles — licences et sources")
+            .setItems(names.toTypedArray()) { _, index ->
+                val text=assets.open("licenses/${names[index]}").bufferedReader().use{it.readText()}
+                val content=TextView(this).apply {setText(text);textSize=14f;setTextIsSelectable(true);setPadding(dp(16),dp(12),dp(16),dp(12))}
+                AlertDialog.Builder(this).setTitle(names[index]).setView(ScrollView(this).apply{addView(content)}).setPositiveButton("Fermer",null).show()
+            }.setNegativeButton("Fermer",null).show()
     }
     private fun button(label:String,action:()->Unit)=Button(this).apply {text=label;isAllCaps=false;setOnClickListener{action()}}
     private fun ui(job:()->Unit) {runOnUiThread {if(!destroyed)job()}}
     private fun message(text:String){ui {status.text=text}}
-    private fun controls(){editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire";pause.isEnabled=active&&!paused}
+    private fun controls(){playFromCursor.isEnabled=!active;editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
     private fun stopReading(){generation.incrementAndGet();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
     private fun pauseReading(){if(!active||paused)return;paused=true;track?.let{try{it.pause()}catch(_:IllegalStateException){}};controls();status.text="En pause. ▶ Continuer reprend au même endroit.";window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
     private fun resumeReading(){if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return};paused=false;track?.play();controls();status.text="Lecture reprise.";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
@@ -96,8 +109,11 @@ class MainActivity : Activity() {
         return OfflineTts(config=OfflineTtsConfig(model=OfflineTtsModelConfig(
             vits=OfflineTtsVitsModelConfig(model=File(dir,"fr_FR-gilles-low.onnx").path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=2),maxNumSentences=1)).also{engine=it}
     }
-    private fun startReading(){
-        val text=editor.text.toString().trim();if(text.isEmpty()){status.text="Ajoutez un texte à lire.";return}
+    private fun startReading(fromCursor:Boolean=false){
+        if(active)return
+        val fullText=editor.text.toString()
+        val text=if(fromCursor) ReadingStart.fromCursor(fullText,editor.selectionStart,editor.selectionEnd) else fullText
+        if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
         active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

@@ -1,0 +1,90 @@
+[
+  {
+    "name": "flatbuffers",
+    "version": "25.12.19",
+    "license": "Apache 2.0",
+    "source": [
+      "Documentation, https://google.github.io/flatbuffers/",
+      "Source, https://github.com/google/flatbuffers"
+    ]
+  },
+  {
+    "name": "numpy",
+    "version": "2.5.4",
+    "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+    "source": [
+      "homepage, https://numpy.org",
+      "documentation, https://numpy.org/doc/",
+      "source, https://github.com/numpy/numpy",
+      "download, https://pypi.org/project/numpy/#files",
+      "tracker, https://github.com/numpy/numpy/issues",
+      "release notes, https://numpy.org/doc/stable/release"
+    ]
+  },
+  {
+    "name": "onnxruntime",
+    "version": "1.31.0",
+    "license": "MIT License",
+    "source": [
+      "https://onnxruntime.ai"
+    ]
+  },
+  {
+    "name": "packaging",
+    "version": "26.3",
+    "license": "Apache-2.0 OR BSD-2-Clause",
+    "source": [
+      "Documentation, https://packaging.pypa.io/",
+      "Source, https://github.com/pypa/packaging"
+    ]
+  },
+  {
+    "name": "pathvalidate",
+    "version": "3.3.1",
+    "license": "MIT License",
+    "source": [
+      "Changelog, https://github.com/thombashi/pathvalidate/blob/master/CHANGELOG.md",
+      "Documentation, https://pathvalidate.rtfd.io/",
+      "Source, https://github.com/thombashi/pathvalidate",
+      "Tracker, https://github.com/thombashi/pathvalidate/issues"
+    ]
+  },
+  {
+    "name": "pip",
+    "version": "26.0.1",
+    "license": "MIT",
+    "source": [
+      "Changelog, https://pip.pypa.io/en/stable/news/",
+      "Documentation, https://pip.pypa.io",
+      "Homepage, https://pip.pypa.io/",
+      "Source, https://github.com/pypa/pip"
+    ]
+  },
+  {
+    "name": "piper-tts",
+    "version": "1.8.0",
+    "license": "GPL-3.0-or-later",
+    "source": [
+      "http://github.com/OHF-voice/piper1-gpl"
+    ]
+  },
+  {
+    "name": "protobuf",
+    "version": "7.36.2",
+    "license": "3-Clause BSD License",
+    "source": [
+      "https://developers.google.com/protocol-buffers/"
+    ]
+  },
+  {
+    "name": "pypdf",
+    "version": "6.10.0",
+    "license": "BSD-3-Clause",
+    "source": [
+      "Bug Reports, https://github.com/py-pdf/pypdf/issues",
+      "Changelog, https://pypdf.readthedocs.io/en/latest/meta/CHANGELOG.html",
+      "Documentation, https://pypdf.readthedocs.io/en/latest/",
+      "Source, https://github.com/py-pdf/pypdf"
+    ]
+  }
+]

@@ -25,16 +25,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Préparer la voix Gilles et le moteur natif
-        run: python prepare.py
-      - name: Compiler, tester et vérifier Android
-        run: gradle assembleDebug testDebugUnitTest lintDebug --no-daemon --console=plain
+      - name: PrÃ©parer la voix Gilles et le moteur natif
+        run: |
+          python prepare.py
+          python legal/prepare_notices.py
+      - name: Compiler, tester et vÃ©rifier Android
+        run: |
+          gradle assembleDebug testDebugUnitTest lintDebug --no-daemon --console=plain
+          gradle :app:dependencies --configuration debugRuntimeClasspath --console=plain > android-runtime-dependencies.txt
       - name: Activer la virtualisation Android
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Tester Gilles et pause/reprise sur Android émulé
+      - name: Tester Gilles et pause/reprise sur Android Ã©mulÃ©
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -42,13 +46,15 @@ jobs:
           target: default
           disable-animations: true
           script: gradle connectedDebugAndroidTest --no-daemon --console=plain
-      - name: Préparer APK installable
+      - name: PrÃ©parer APK installable
         run: cp app/build/outputs/apk/debug/app-debug.apk Lecteur-Gilles-Android.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Lecteur-Gilles-Android
           path: |
             Lecteur-Gilles-Android.apk
+            Lecteur-Gilles-Sources-preparation.zip
+            android-runtime-dependencies.txt
             app/build/reports/tests/testDebugUnitTest/
             app/build/reports/lint-results-debug.html
             app/build/reports/androidTests/connected/
@@ -57,4 +63,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "APK de test signé : voix Gilles incluse, lecture locale. Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles â€” test ${GITHUB_RUN_NUMBER}" --notes "APK de test signÃ© : voix Gilles incluse, lecture locale. Compilation, tests unitaires et lint exÃ©cutÃ©s. Ã€ tester sur un tÃ©lÃ©phone Android 8+. Signature de dÃ©veloppement : une mise Ã  jour peut nÃ©cessiter de dÃ©sinstaller une version de test prÃ©cÃ©dente."

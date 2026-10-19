@@ -12,11 +12,19 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReaderTest {
     private fun field(a:MainActivity,name:String):Any? = MainActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.get(a)
-    @Test fun gillesAndPauseResume() {
+    @Test fun gillesAndPauseResume() = verifyReading(false)
+    @Test fun cursorAndPauseResume() = verifyReading(true)
+    private fun verifyReading(fromCursor:Boolean) {
+        val prefix="TABLE DES MATIÈRES. Passage à ignorer.\n"
+        val body="Bonjour. Je suis Gilles. Ceci est un test de lecture, de pause et de reprise. ".repeat(8)
+        val original=prefix+body
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { a ->
-                (field(a,"editor") as EditText).setText("Bonjour. Je suis Gilles. Ceci est un test de lecture, de pause et de reprise. ".repeat(8))
-                (field(a,"play") as Button).performClick()
+                val editor=field(a,"editor") as EditText
+                editor.setText(original)
+                editor.setSelection(prefix.length,prefix.length+7)
+                (field(a,if(fromCursor) "playFromCursor" else "play") as Button).performClick()
+                assertEquals(original,editor.text.toString())
             }
             val deadline=System.currentTimeMillis()+180000
             var position=0
@@ -30,7 +38,7 @@ class ReaderTest {
             var first=0
             scenario.onActivity { a ->
                 assertTrue(field(a,"paused") as Boolean)
-                assertEquals("▶ Continuer",(field(a,"play") as Button).text.toString())
+                assertEquals("â–¶ Continuer",(field(a,"play") as Button).text.toString())
                 first=(field(a,"track") as AudioTrack).playbackHeadPosition
             }
             Thread.sleep(500)
@@ -40,7 +48,13 @@ class ReaderTest {
                 assertTrue("La reprise n'avance pas",(field(a,"track") as AudioTrack).playbackHeadPosition>first)
                 MainActivity::class.java.getDeclaredMethod("stopReading").apply{isAccessible=true}.invoke(a)
                 assertFalse(field(a,"active") as Boolean)
-                assertTrue((field(a,"editor") as EditText).isEnabled)
+                val editor=field(a,"editor") as EditText
+                assertTrue(editor.isEnabled)
+                assertEquals(original,editor.text.toString())
+                editor.setSelection(editor.text.length)
+                (field(a,"playFromCursor") as Button).performClick()
+                assertFalse(field(a,"active") as Boolean)
+                assertTrue((field(a,"status") as android.widget.TextView).text.contains("fin du texte"))
             }
         }
     }

@@ -1,0 +1,25 @@
+# Construire et installer sous Windows 10/11 x64
+
+Prévoir Python 3.14 x64 et .NET Framework 4.x. Le lecteur actuel a été testé avec Python 3.14.4. Placez ce dossier et ses fichiers dans un emplacement autorisé en écriture, par exemple D:\Lecteur-Gilles\lecteur. Conservez les textes de licence et fichiers de contrôle.
+
+Dans PowerShell, depuis ce dossier, remplacez le chemin Python par celui de votre installation privée :
+
+```powershell
+$pythonBase = 'D:\Lecteur-Gilles\python-private\python.exe'
+New-Item -ItemType Directory -Force temp | Out-Null
+$env:TEMP = Join-Path $PWD 'temp'
+$env:TMP = $env:TEMP
+& $pythonBase -m venv runtime
+& .\runtime\Scripts\python.exe -m pip install --no-cache-dir -r requirements.txt
+& .\runtime\Scripts\python.exe prepare_voices.py
+.\build.ps1
+.\Ouvrir-Piper.bat
+```
+
+Le dossier `licences` est préparé par `python legal/prepare_notices.py` depuis la racine du dépôt, avant copie de `windows`. Aucun document personnel n’est nécessaire.
+
+Le venv référence le Python de base : **ne déplacez pas simplement un environnement existant**. Recréez-le avec le Python du nouvel emplacement. Dans l’installation locale migrée, le Python de base et les dépendances sont sur D. Les lanceurs de console tiers hérités ne sont pas utilisés : utilisez toujours `runtime\Scripts\python.exe -m ...`.
+
+Cliquez dans le texte puis sur « Lire à partir du curseur » pour commencer à cet endroit. Une sélection commence à son début, puis la lecture continue jusqu’à la fin. « Lire tout » recommence depuis le début ; « Continuer » reprend une lecture en pause. Le texte affiché n’est pas tronqué.
+
+Validation exécutée sur la version locale : compilation C#, lecture réelle depuis curseur/sélection, exclusion du préambule dans la requête, document intact, pause/reprise, fin de texte et lecture complète ; import et lecture progressive du PDF synthétique de 300 pages. La réinstallation intégrale depuis Internet et la reconstruction de toutes les bibliothèques natives restent à vérifier séparément (voir legal/AUDIT.md).

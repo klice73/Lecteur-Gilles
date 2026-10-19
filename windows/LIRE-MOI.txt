@@ -1,0 +1,55 @@
+LECTEUR PIPER — français, local, sans quota
+
+Démarrer : double-cliquez sur Ouvrir-Piper.bat dans ce dossier.
+Gardez le dossier complet à son emplacement actuel : le runtime Python
+utilise l'installation Python existante sur cet ordinateur.
+
+Collez votre texte ou cliquez sur Ouvrir un document, puis sur Lire.
+Formats : PDF contenant du texte, DOCX, ODT, EPUB, TXT, MD, HTML, CSV.
+Vous pouvez aussi glisser un document dans la fenêtre.
+Le texte reste visible pendant la préparation et la lecture.
+Arrêter interrompt la préparation ou la lecture.
+La vitesse choisie s'applique au prochain clic sur Lire ou Enregistrer.
+Enregistrer en WAV crée un fichier audio à l'emplacement de votre choix.
+Les PDF scannés nécessitent un OCR, non inclus dans cette version.
+Les PDF protégés par mot de passe doivent être déverrouillés au préalable.
+Les anciens fichiers Word .doc doivent être enregistrés en .docx.
+Les tableaux et colonnes peuvent nécessiter une correction de l'ordre
+de lecture : vérifiez le texte affiché avant de lancer la voix.
+Le texte principal est importé ; les images, notes et mises en page ne
+sont pas reproduites. Un livre EPUB protégé par DRM n'est pas pris en charge.
+
+La lecture commence après la préparation du premier passage. Le moteur
+prépare ensuite les passages suivants en arrière-plan (800 caractères
+maximum par passage, trois fichiers audio au maximum en attente).
+Les passages déjà lus sont supprimés. Le livre entier ne devient plus
+un seul gros fichier temporaire pendant la lecture.
+La voix et les calculs sont locaux. Aucun texte n'est envoyé sur Internet.
+Cliquez sur ⏸ Pause pour suspendre la lecture, puis ▶ Continuer pour
+reprendre au même endroit. ■ Arrêter remet la lecture à zéro.
+La pause conserve le passage en cours. La voix et la vitesse sont
+verrouillées pendant la lecture ; cliquez sur Arrêter pour les modifier.
+Il n'y a pas de suivi mot par mot dans cette version.
+
+Voix : Gilles (fr_FR-gilles-low), choisie par défaut, et Siwis
+(fr_FR-siwis-medium). Choisissez dans le menu Voix avant la lecture.
+Moteur : Piper 1.8.0, installé dans un environnement séparé.
+Source du moteur : https://github.com/OHF-Voice/piper1-gpl (GPL-3.0)
+Voix : https://huggingface.co/rhasspy/piper-voices/tree/main/fr/fr_FR/siwis/medium
+Le code de la fenêtre est fourni dans Fenetre.cs ; le moteur dans lecteur.py.
+L'importation est dans documents.py. PDF : bibliothèque pypdf (licence BSD),
+incluse dans vendor avec ses informations de licence.
+La fenêtre est Piper-Gilles.exe, avec le visage à barbe blanche. Utilisez Ouvrir-Piper.bat ou le raccourci Piper-Voix du bureau.
+Le projet Android distinct est publié sur github.com/klice73/Lecteur-Gilles.
+
+PDF : la case « Ignorer les en-têtes et numéros de page » est activée
+par défaut. Elle retire les numéros isolés dans les marges et les courts
+en-têtes/pieds de page répétés détectés. Les nombres dans le corps
+du texte sont conservés. Décochez puis rouvrez le fichier pour obtenir
+le texte original. La détection dépend de la structure du PDF.
+
+Vérification : import d’un PDF synthétique de 300 pages (plus de
+900 000 caractères), démarrage de la voix Gilles, pause/reprise,
+enchaînement des passages, file bornée, arrêt, export WAV multi-passages
+et nettoyage des marges. Ce test ne correspond pas à l’écoute complète
+d’un livre ni à un test du document personnel de l’utilisateur.

@@ -1,0 +1,134 @@
+[
+  {
+    "file": "legal/evidence/voices-README.md",
+    "url": "https://huggingface.co/rhasspy/piper-voices/raw/c10ece1aade47bb51c153c893d14e5bf8e5b7117/README.md",
+    "sha256": "33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Gilles-MODEL_CARD.txt",
+    "url": "https://huggingface.co/rhasspy/piper-voices/raw/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/gilles/low/MODEL_CARD",
+    "sha256": "29d0964475ce042f5cd59c46bbd996fac785a84476c09d0973295d3528456974",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Siwis-MODEL_CARD.txt",
+    "url": "https://huggingface.co/rhasspy/piper-voices/raw/c10ece1aade47bb51c153c893d14e5bf8e5b7117/fr/fr_FR/siwis/medium/MODEL_CARD",
+    "sha256": "bd8b8d079d4d3d2c4cc20345889bbcd586d72f021a132f93357a763eb5232cce",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Piper-CMakeLists.txt",
+    "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/v1.8.0/CMakeLists.txt",
+    "sha256": "cda01f6b8f8ed8fc748397e4ea687933c7141cfd051bdef0a33478bcae3f5a8e",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-android-workflow.txt",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/.github/workflows/android.yaml",
+    "sha256": "cd692cbc4f0dfa739c0877e4dad3a4bed510c08171d7a6be28d03b1bc4c25d67",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-espeak-ng-for-piper.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/espeak-ng-for-piper.cmake",
+    "sha256": "d353f2becec6c8a2064e314b7d0d9c4e4388b48c7e5742a3ba8a62355952407c",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-piper-phonemize.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/piper-phonemize.cmake",
+    "sha256": "b062750c938e4f4e778b9c0605a250f4abebdf17656c0d654fbace43a800258b",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-eigen.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/eigen.cmake",
+    "sha256": "8239d74b44e37e1bb05be2e1c86f6b1e931f0daca93b325fb2e0b6d6e996b2ed",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-json.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/json.cmake",
+    "sha256": "e318b4065954cb479318d191c91e32d5a0cae94a53fff70987791b6f9828b1de",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-kaldi-decoder.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/kaldi-decoder.cmake",
+    "sha256": "af34b17974474a70b12978d49ac0831276839082924e5ac93bd9bb194a7fd310",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-kaldi-native-fbank.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/kaldi-native-fbank.cmake",
+    "sha256": "619f0046f568e85790f4180899e666053f246f5c0fc36c951421441f3e992e38",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-openfst.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/openfst.cmake",
+    "sha256": "1658b8ba6bc449daef239cece7ebf6d0bef09665dd4a078ccf6cb66ec01e5d1f",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-simple-sentencepiece.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/simple-sentencepiece.cmake",
+    "sha256": "af791de58aa82fe575d709f773b526cd31a3a5b6b56397ea3da665eee12659ad",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-hclust-cpp.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/hclust-cpp.cmake",
+    "sha256": "093ae7b3712119d140df2629b5d20b71bafb3d49ba0124dd7a391f278f4db357",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-cargs.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/cargs.cmake",
+    "sha256": "2deabf4fa3854380c486063d8dae96fa9693210e73f08fa0cf6eb3551391e5f3",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/evidence/Sherpa-onnxruntime-android-aarch64.cmake",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/cmake/onnxruntime-android-aarch64.cmake",
+    "sha256": "593cd72a365fb13f60858756fdb78925a20f6dcfa5343e1d4ed549f632cedeee",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/GPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/OHF-Voice/piper1-gpl/v1.8.0/COPYING",
+    "sha256": "0ae0485a5bd37a63e63603596417e4eb0e653334fa6c7f932ca3a0e85d4af227",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/Sherpa-Apache-2.0.txt",
+    "url": "https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.8/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/ONNX-Runtime-MIT.txt",
+    "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/LICENSE",
+    "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/ONNX-Runtime-ThirdParty.txt",
+    "url": "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/ThirdPartyNotices.txt",
+    "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/CC-BY-4.0.txt",
+    "url": "https://creativecommons.org/licenses/by/4.0/legalcode.txt",
+    "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411",
+    "retrieved": "2026-10-19"
+  },
+  {
+    "file": "legal/licenses/CC0-1.0.txt",
+    "url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode.txt",
+    "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "retrieved": "2026-10-19"
+  }
+]

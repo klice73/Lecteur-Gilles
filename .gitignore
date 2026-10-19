@@ -8,3 +8,14 @@ app/src/main/assets/vits-piper-fr_FR-gilles-low/
 *.jks
 *.keystore
 .idea/
+
+.source-cache/
+Lecteur-Gilles-Sources-preparation.zip
+windows/licences/
+windows/runtime/
+windows/voix/
+windows/temp/
+windows/*.exe
+windows/Gilles.ico
+app/src/main/assets/licenses/
+**/__pycache__/
