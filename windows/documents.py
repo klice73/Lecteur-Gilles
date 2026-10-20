@@ -150,15 +150,14 @@ _RE_NOMBRE_SEUL = re.compile('^(?:[–—-]' + _E + '*)?([0-9]{1,3})(?:' + _E + 
 _RE_SUITE_LONG = re.compile('^(?:$|' + _E + '*[:.–—-](?:$|' + _E + ')|' + _E + r'+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|' + _E + '|[.:)–—,-])|' + _E + r'+(?i:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)' + _E + '*(?:$|[.:–—-]))')
 
 
-_FIN_PHRASE = '.!?»…"”):;'
 _MINUSCULES = 'abcdefghijklmnopqrstuvwxyzàâäçéèêëîïôöùûüÿœæ'
 
 
-def _coupe(k, nets, voisin, titres):
-    """La ligne k coupe-t-elle une phrase ? (ligne d'avant sans ponctuation finale et qui n'est pas un titre,
-    ou ligne d'apres qui commence par une minuscule)"""
-    av, ap = voisin(k, -1), voisin(k, 1)
-    return (av is not None and av not in titres and nets[av][-1] not in _FIN_PHRASE) or (ap is not None and nets[ap][0] in _MINUSCULES)
+def _coupe(k, nets, voisin):
+    """La ligne k coupe-t-elle une phrase ? La ligne d'apres continue en minuscule. (La ligne d'avant sans
+    point n'est pas un indice sur : signature d'une epigraphe, vers, titre.)"""
+    ap = voisin(k, 1)
+    return ap is not None and nets[ap][0] in _MINUSCULES
 
 
 def chapitres_devines(texte, pages=None):
@@ -247,7 +246,6 @@ def chapitres_devines(texte, pages=None):
     # un seul ; moins de 3 lignes entre deux (etapes d'une recette, liste) ; un sur deux pages ou plus d'un PDF,
     # ou ecarts tres reguliers (numeros de page d'un texte colle).
     ecartes = set()
-    titres = {x[3] for x in res}
     for sorte, ks in seuls.items():
         if not ks:
             continue
@@ -258,7 +256,7 @@ def chapitres_devines(texte, pages=None):
             mauvais = True
         # numero de page d'un texte colle : il coupe une phrase (ligne d'avant sans ponctuation finale,
         # ou ligne d'apres qui commence par une minuscule) ; un numero de chapitre suit une fin de chapitre
-        coupures = sum(1 for k in ks if _coupe(k, nets, voisin, titres))
+        coupures = sum(1 for k in ks if _coupe(k, nets, voisin))
         if len(ks) >= 3 and 10 * coupures >= 3 * len(ks):
             mauvais = True
         if mauvais:

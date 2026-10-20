@@ -69,7 +69,6 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
             "TREIZE","QUATORZE","QUINZE","SEIZE","DIX-SEPT","DIX-HUIT","DIX-NEUF","VINGT")
         private val nombreSeul=Regex("(?d)^(?:[–—-]$E*)?([0-9]{1,3})(?:$E*[–—-])?$")
         private val suiteLong=Regex("(?d)^(?:$|$E*[:.–—-](?:$|$E)|$E+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|$E|[.:)–—,-])|$E+(?iu:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)$E*(?:$|[.:–—-]))")
-        private const val FIN_PHRASE=".!?»…\"”):;"
         private const val MINUSCULES="abcdefghijklmnopqrstuvwxyzàâäçéèêëîïôöùûüÿœæ"
         private data class Trouve(val titre:String,val niveau:Int,val debut:Int,val ligne:Int)
         /** Titres reconnus dans un texte sans table (« Chapitre 3 », « Première partie », « III » ou « 3 » seuls…).
@@ -142,10 +141,10 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
             // Numéros seuls (« 3 », « III », « TROIS ») écartés en bloc s'ils ressemblent à autre chose qu'à des chapitres :
             // un seul ; moins de 3 lignes entre deux (recette, liste) ; un sur deux pages ou plus ; écarts très réguliers.
             val ecartes=HashSet<Int>()
-            val titresLignes=res.map{it.ligne}.toHashSet()
             fun coupe(k:Int):Boolean{
-                val av=voisin(k,-1); val ap=voisin(k,1)
-                return (av!=null && av !in titresLignes && nets[av].last() !in FIN_PHRASE) || (ap!=null && nets[ap][0] in MINUSCULES)
+                // la ligne d'après continue en minuscule (la ligne d'avant sans point n'est pas un indice sûr : épigraphe, vers)
+                val ap=voisin(k,1)
+                return ap!=null && nets[ap][0] in MINUSCULES
             }
             for((sorte,ks) in seuls){
                 if(ks.isEmpty())continue

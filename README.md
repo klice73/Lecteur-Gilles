@@ -25,6 +25,7 @@ Gilles et le moteur sont intégrés à l'APK. L'application ne demande aucune pe
 
 ## Limites
 
+- Titres repérés d'après le texte (quand le document n'a ni signets ni titres) : c'est une estimation. Dans un texte collé, des numéros de page qui tombent entre deux phrases complètes peuvent passer pour des chapitres ; « UN » ou « DEUX » seuls sur une ligne aussi ; des chapitres renumérotés à 1 ne sont reconnus qu'après un titre de partie, livre ou tome. Sur nos textes d'essai : 91 % des titres trouvés, aucun faux titre.
 - Les PDF scannés nécessitent un OCR, non inclus. L'ordre des colonnes/tableaux peut nécessiter une correction du texte.
 - Import limité à 30 Mo par fichier. DOCX/ODT : texte principal, sans reproduction de la mise en page.
 - La lecture reste au premier plan ; elle ne continue pas écran verrouillé.
