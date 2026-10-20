@@ -264,7 +264,10 @@ class MainActivity : Activity() {
         layout.addView(TextView(this).apply {text="Touchez le texte pour placer le curseur. Une sélection commence à son début ; la lecture continue jusqu’à la fin.";textSize=12f})
         status=TextView(this).apply {text="Prêt. La première préparation peut prendre un moment.";textSize=14f;setPadding(0,12,0,8)}
         layout.addView(status)
-        layout.addView(button("À propos et licences") {showLicenses()})
+        val bas=LinearLayout(this)
+        bas.addView(button("Prononciations…") {editerLexique()},LinearLayout.LayoutParams(0,dp(52),1f))
+        bas.addView(button("À propos et licences") {showLicenses()},LinearLayout.LayoutParams(0,dp(52),1f))
+        layout.addView(bas)
         setContentView(layout)
         highlightHandler.post(highlightTick)
         registerReceiver(noisy,android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
@@ -272,6 +275,26 @@ class MainActivity : Activity() {
         val p=savedPosition()
         if(p>=0){editor.setSelection(p);status.text="Position de lecture retrouvée. Touchez ⟲ Reprendre où j'étais."}
         controls()
+    }
+    // ---- Lexique de prononciation (version 1.8) ----
+    private val lexiqueFile by lazy { File(filesDir,"prononciations.txt") }
+    private fun chargerLexique():Prononciations = try{Prononciations.lire(if(lexiqueFile.exists()) lexiqueFile.readText() else "")}catch(_:Exception){Prononciations.lire("")}
+    private fun editerLexique(){
+        val contenu=try{if(lexiqueFile.exists()) lexiqueFile.readText() else Prononciations.ENTETE}catch(_:Exception){Prononciations.ENTETE}
+        val champ=EditText(this).apply{setText(contenu);textSize=15f;gravity=android.view.Gravity.TOP;minLines=8
+            inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;setHorizontallyScrolling(false)}
+        val choisi=editor.text.substring(minOf(editor.selectionStart,editor.selectionEnd).coerceAtLeast(0),maxOf(editor.selectionStart,editor.selectionEnd).coerceAtLeast(0)).trim()
+        if(choisi.isNotEmpty() && choisi.length<60 && '\n' !in choisi){
+            val t=champ.text.toString(); champ.setText(t+(if(t.endsWith("\n")||t.isEmpty()) "" else "\n")+choisi+" = "); champ.setSelection(champ.text.length)
+        }
+        AlertDialog.Builder(this).setTitle("Prononciations : mot = comment le dire").setView(champ)
+            .setPositiveButton("Enregistrer"){_,_->
+                try{
+                    val tmp=File(filesDir,"prononciations.tmp");tmp.writeText(champ.text.toString())
+                    if(!tmp.renameTo(lexiqueFile)){lexiqueFile.writeText(champ.text.toString());tmp.delete()}
+                    status.text="Prononciations enregistrées (${chargerLexique().taille} mots) : appliquées à la prochaine lecture."
+                }catch(e:Exception){status.text="Enregistrement impossible : ${e.message}"}
+            }.setNegativeButton("Annuler",null).show()
     }
     private fun showLicenses(){
         val names=(assets.list("licenses")?:emptyArray()).sorted()
@@ -313,6 +336,7 @@ class MainActivity : Activity() {
         if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
         readingHash=empreinte(fullText);saveText()
+        val lexique=chargerLexique()
         avecReperes(false){}   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
         active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -345,7 +369,7 @@ class MainActivity : Activity() {
                             for(r in Minutage.phrases(part.text)){
                                 if(!continuer())break
                                 val phrase=part.text.substring(r.first,r.last+1)
-                                val audio=tts.generateWithCallback(phrase,0,rate){if(continuer())1 else 0}
+                                val audio=tts.generateWithCallback(lexique.appliquer(phrase),0,rate){if(continuer())1 else 0}   // surlignage : phrase affichée
                                 if(!continuer() || audio.samples.isEmpty())continue
                                 val debutPhrase=baseOffset+part.start+r.first
                                 val item=Phrase(audio.samples,Minutage.minuter(phrase,audio.samples,sampleRate),debutPhrase,debutPhrase+phrase.trimEnd().length)

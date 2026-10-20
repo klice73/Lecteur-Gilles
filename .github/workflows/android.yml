@@ -116,7 +116,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.7.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.7.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.8.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.8.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -158,6 +158,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw "test ebooks en echec"}
           windows\runtime\Scripts\python.exe windows\tests\test_reperes.py
           if($LASTEXITCODE -ne 0){throw "test des reperes en echec"}
+          windows\runtime\Scripts\python.exe windows\tests\test_lexique.py
+          if($LASTEXITCODE -ne 0){throw "test du lexique en echec"}
           windows\runtime\Scripts\python.exe windows\documents.py windows\tests\livre.pdf windows\doc-livre.json
           if($LASTEXITCODE -ne 0){throw "documents.py en echec"}
       - name: Compiler Piper-Gilles.exe (C#, .NET Framework)
@@ -186,7 +188,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
-          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.7.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
+          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.8.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
           Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json paquet\voix\
-          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.7.zip
-          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.7.zip
+          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.8.zip
+          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.8.zip

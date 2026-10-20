@@ -105,6 +105,7 @@ class Lecteur : Form {
         reprendre=Ajouter(actions,"⟲ Reprendre où j'étais",delegate { Reprendre(); });reprendre.Enabled=false;
         actions.SetFlowBreak(reprendre,true);
         Ajouter(actions,"Enregistrer en WAV",delegate { Demarrer(true); });
+        Ajouter(actions,"Prononciations…",delegate { EditerLexique(); });
         Ajouter(actions,"À propos et licences",delegate { AfficherLicences(); });
         var aide=new ToolTip();aide.SetToolTip(lireCurseur,"Cliquez dans le texte. Si du texte est sélectionné, la lecture commence au début de la sélection et continue jusqu’à la fin du document.");
         statut.Dock=DockStyle.Fill; statut.Text="Ouvrez ou glissez un EPUB, FB2, PDF, DOCX, ODT, HTML ou fichier texte."; grille.Controls.Add(statut,0,4);
@@ -265,6 +266,32 @@ class Lecteur : Form {
             allerPage.Click+=delegate {pageChoisie();};
             champ.KeyDown+=delegate(object s,KeyEventArgs e) {if(e.KeyCode==Keys.Enter){pageChoisie();e.Handled=true;e.SuppressKeyPress=true;}};
             if(f.ShowDialog(this)==DialogResult.OK && choix>=0)Naviguer(choix,lire.Checked);
+        }
+    }
+    // ---- Lexique de prononciation (version 1.8) : prononciations.txt, lu par lecteur.py ----
+    const string EnteteLexique="# Lexique de prononciation de Gilles\r\n# Une ligne par mot :  mot = comment Gilles doit le dire\r\n# Ecrivez la prononciation comme un mot francais (accents permis). Exemples :\r\n#   Bateson = Bétsonne\r\n#   POETICS-S = Poétixe esse\r\n# Mot entier seulement, majuscules ou non. Les lignes qui commencent par # sont ignorées.\r\n# Le texte affiché ne change pas ; seule la voix est corrigée.\r\n\r\n";
+    void EditerLexique() {
+        string fichier=Path.Combine(racine,"prononciations.txt");
+        string contenu=File.Exists(fichier)?File.ReadAllText(fichier,Encoding.UTF8):EnteteLexique;
+        using(var f=new Form {Text="Prononciations de Gilles",Size=new Size(700,560),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,Font=Font}) {
+            var aide=new Label {Text="Une ligne par mot : mot = comment le dire. Exemple : Bateson = Bétsonne. Pour ajouter le mot sélectionné dans le texte, cliquez sur « Ajouter la sélection ».",Dock=DockStyle.Top,Height=48};
+            var zone=new TextBox {Multiline=true,ScrollBars=ScrollBars.Both,Dock=DockStyle.Fill,Font=new Font("Consolas",11),AcceptsReturn=true,WordWrap=false,Text=contenu.Replace("\r\n","\n").Replace("\n","\r\n")};
+            var bas=new FlowLayoutPanel {Dock=DockStyle.Bottom,Height=48,FlowDirection=FlowDirection.RightToLeft};
+            var annuler=new Button {Text="Annuler",AutoSize=true,DialogResult=DialogResult.Cancel};
+            var enregistrer=new Button {Text="Enregistrer",AutoSize=true,DialogResult=DialogResult.OK};
+            var ajouter=new Button {Text="Ajouter la sélection",AutoSize=true};
+            string choisi=texte.SelectedText.Trim();
+            ajouter.Enabled=choisi.Length>0 && choisi.Length<60 && choisi.IndexOf('\n')<0;
+            ajouter.Click+=delegate {
+                if(!zone.Text.EndsWith("\r\n") && zone.Text.Length>0)zone.AppendText("\r\n");
+                zone.AppendText(choisi+" = ");zone.Focus();zone.SelectionStart=zone.TextLength;
+            };
+            bas.Controls.Add(annuler);bas.Controls.Add(enregistrer);bas.Controls.Add(ajouter);
+            f.Controls.Add(zone);f.Controls.Add(aide);f.Controls.Add(bas);f.AcceptButton=null;f.CancelButton=annuler;
+            if(f.ShowDialog(this)==DialogResult.OK) {
+                try {EcrireSur(fichier,zone.Text);statut.Text="Prononciations enregistrées : appliquées à la prochaine lecture.";}
+                catch(Exception e) {MessageBox.Show("Enregistrement impossible : "+e.Message,"Prononciations");}
+            }
         }
     }
     // ---- Session : texte et position de lecture (version 1.5) ----

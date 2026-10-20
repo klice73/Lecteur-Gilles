@@ -1,5 +1,0 @@
-Lecteur Gilles 1.7
-Fermez le lecteur puis décompressez ce paquet dans le dossier du lecteur Windows existant, en remplaçant les fichiers. Gardez runtime, voix et session.
-EPUB, KEPUB, FB2 et FB2.ZIP : ouverture directe.
-MOBI, AZW3, RTF et autres formats : installez calibre depuis https://calibre-ebook.com puis ouvrez le livre. Conversion locale temporaire, original conservé. calibre reste un logiciel séparé.
-Les livres protégés, KFX et ACSM ne sont pas lus directement. Les scans et BD en images nécessitent un OCR.

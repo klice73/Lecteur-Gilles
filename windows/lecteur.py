@@ -221,7 +221,53 @@ def correspondance_sure(voice, phrase, mots, bouts):
     return True
 
 
-def synthese_minutee(voice, passage, config):
+# --- Lexique de prononciation (version 1.8) ----------------------------------
+# Fichier texte modifiable, une ligne par mot :  mot = comment le dire
+# (ex. « Bateson = Bétsonne »). Lignes vides et lignes commencant par # ignorees.
+# Mot entier, sans tenir compte des majuscules. Meme regle dans Prononciations.kt.
+_LETTRES = '0-9A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f'
+
+
+def lire_lexique(texte):
+    """[(mot, prononciation)] depuis le contenu du fichier lexique."""
+    res = []
+    for ligne in texte.replace('\r', '').split('\n'):
+        ligne = ligne.strip()
+        if not ligne or ligne.startswith('#') or '=' not in ligne:
+            continue
+        mot, dire = (x.strip() for x in ligne.split('=', 1))
+        if mot and dire:
+            res.append((mot, dire))
+    return res
+
+
+def motif_lexique(lexique):
+    if not lexique:
+        return None, {}
+    table = {}
+    for mot, dire in lexique:
+        table.setdefault(mot.lower(), dire)   # premiere ligne gagnante
+    alternatives = '|'.join(re.escape(m) for m in sorted(table, key=len, reverse=True))
+    motif = re.compile('(?<![' + _LETTRES + '])(?:' + alternatives + ')(?![' + _LETTRES + '])', re.I)
+    return motif, table
+
+
+def appliquer_lexique(texte, motif, table):
+    if motif is None:
+        return texte
+    return motif.sub(lambda m: table.get(m.group(0).lower(), m.group(0)), texte)
+
+
+def charger_lexique():
+    f = ROOT / 'prononciations.txt'
+    try:
+        return motif_lexique(lire_lexique(f.read_text(encoding='utf-8-sig')))
+    except OSError:
+        return None, {}
+# ---------------------------------------------------------------------------
+
+
+def synthese_minutee(voice, passage, config, lexique=(None, {})):
     """Audio int16 du passage + minutage. Positions en UTF-16 relatives au passage.
     Mots alignes exactement quand la voix fournit ses durees, sinon estimes."""
     import numpy as np
@@ -229,7 +275,8 @@ def synthese_minutee(voice, passage, config):
     exacts = estimes = 0
     for a, b in phrases(passage):
         phrase = passage[a:b]
-        bouts = list(voice.synthesize(phrase, syn_config=config, include_alignments=True))
+        dite = appliquer_lexique(phrase, *lexique)   # ce que Gilles prononce ; le surlignage suit la phrase affichee
+        bouts = list(voice.synthesize(dite, syn_config=config, include_alignments=True))
         if not bouts:
             continue
         sr = bouts[0].sample_rate
@@ -237,7 +284,7 @@ def synthese_minutee(voice, passage, config):
         base = u16(passage[:a])
         minutage = minuter(phrase, audio, sr)
         debuts = debuts_alignes(voice, bouts)
-        if (debuts is not None and len(debuts) == len(minutage) and debuts
+        if (dite == phrase and debuts is not None and len(debuts) == len(minutage) and debuts
                 and correspondance_sure(voice, phrase, poids_mots(phrase), bouts)):
             fins = debuts[1:] + [len(audio)]
             minutage = [(t0 if k else 0, t1, d, f) for k, (t0, t1, (_, _, d, f)) in enumerate(zip(debuts, fins, minutage))]
@@ -273,6 +320,7 @@ def synthesize(request, output, streaming=False):
         raise ValueError('Voix non prise en charge')
     voice = PiperVoice.load(str(ROOT / 'voix' / (selected + '.onnx')))
     config = SynthesisConfig(length_scale=1.0 / data['speed'])
+    lexique = charger_lexique()
     parts = (p for p in text_parts(data['text']) if p.strip())
     if streaming:
         folder = Path(output)
@@ -283,7 +331,7 @@ def synthesize(request, output, streaming=False):
             while sum(1 for _ in folder.glob('part-*.wav')) >= 3:
                 time.sleep(0.1)
             pending = folder / 'preparation.tmp'
-            pcm, sr, minutage = synthese_minutee(voice, part, config)
+            pcm, sr, minutage = synthese_minutee(voice, part, config, lexique)
             with wave.open(str(pending), 'wb') as audio:
                 audio.setnchannels(1)
                 audio.setsampwidth(2)
@@ -298,7 +346,7 @@ def synthesize(request, output, streaming=False):
         with wave.open(str(output), 'wb') as audio:
             initialized = False
             for part in parts:
-                for chunk in voice.synthesize(part, syn_config=config):
+                for chunk in voice.synthesize(appliquer_lexique(part, *lexique), syn_config=config):
                     if not initialized:
                         audio.setframerate(chunk.sample_rate)
                         audio.setsampwidth(chunk.sample_width)

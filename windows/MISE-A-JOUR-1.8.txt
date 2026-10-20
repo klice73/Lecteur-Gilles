@@ -1,4 +1,18 @@
-LECTEUR GILLES 1.6 POUR WINDOWS : MISE A JOUR
+LECTEUR GILLES 1.8 POUR WINDOWS : MISE A JOUR
+
+Nouveautes de la 1.8
+  - Bouton « Prononciations… » : lexique de prononciation que vous modifiez vous-meme,
+    une ligne par mot :  mot = comment Gilles doit le dire  (ex. « Bateson = Betsonne »).
+    Selectionnez un mot dans le texte puis « Ajouter la selection » pour l'inscrire.
+    Le texte affiche ne change pas ; seule la voix est corrigee, a la lecture comme
+    dans l'enregistrement WAV. Le lexique est garde dans prononciations.txt, dans le
+    dossier du lecteur ; les mises a jour ne le remplacent pas.
+  - Un mot corrige par le lexique est surligne par estimation (sa phrase reste exacte).
+
+Nouveautes de la 1.7 (livres numeriques)
+  - EPUB, KEPUB, FB2 et FB2.ZIP : ouverture directe.
+  - MOBI, AZW3, RTF et autres formats : installez calibre depuis https://calibre-ebook.com puis ouvrez le livre. Conversion locale temporaire, original conservé. calibre reste un logiciel séparé.
+  - Les livres protégés, KFX et ACSM ne sont pas lus directement. Les scans et BD en images nécessitent un OCR.
 
 Nouveautes de la 1.6
   - Bouton « ☰ Aller a… » : table des matieres du livre (double-clic sur un titre)
@@ -26,12 +40,14 @@ Nouveautes de la 1.5
 Installation (environ 1 minute)
   1. Fermer le lecteur Gilles.
   2. Ouvrir le dossier ou se trouve Piper-Gilles.exe (sur D:).
-     Par prudence, copier Piper-Gilles.exe, lecteur.py, documents.py et
+     C'est le dossier qui contient aussi le sous-dossier « runtime ».
+     Par prudence, copier Piper-Gilles.exe, lecteur.py, documents.py, ebooks.py et
      voix\fr_FR-gilles-low.onnx dans un dossier « ancienne-version ».
   3. Copier le contenu de ce paquet dans ce dossier, en acceptant de remplacer :
        Piper-Gilles.exe
        lecteur.py
        documents.py
+       ebooks.py
        voix\fr_FR-gilles-low.onnx
        voix\fr_FR-gilles-low.onnx.json
   4. Relancer le lecteur avec le raccourci du bureau (inchange).
