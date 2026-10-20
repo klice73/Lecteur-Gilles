@@ -19,19 +19,24 @@ class ReperesTest {
         for(seul in listOf("Chapitre 3","CHAPITRE 12","Partie 2","Annexe 1","Chapitre 1 : Le lac numéro 1"))
             assertEquals(listOf(seul),titres("Texte avant.\n$seul\nTexte apres."))
         assertEquals(listOf("Sommaire","Chapitre 1 La neige","I","II"),
-            titres("Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nII\nDeux."))
+            titres("Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nEncore.\nII\nDeux.\nEncore."))
         assertEquals(listOf("1. Introduction","2. Portrait","2.1 Détails","3. Fin"),
             titres("1. Introduction\nTexte :\n1. Un\n2. Deux\n3. Trois\n2. Portrait\n2.1 Détails\nTexte.\n3. Fin\nTexte."))
         assertEquals(listOf("Notes"),titres("Ingrédients\n1 L de bouillon\nConclusion : ils étaient perdus, mais ensemble.\nNotes"))
         // contre-audit (mêmes cas que test_reperes.py)
         assertEquals(listOf("Première partie","Chapitre 1","Chapitre 2","Deuxième partie","Chapitre 1","Chapitre 2"),titres("Première partie\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nDeuxième partie\nChapitre 1\nTexte.\nChapitre 2\nTexte."))
-        assertEquals(listOf("Première partie","I","II","Deuxième partie","I","II"),titres("Première partie\nI\nTexte.\nII\nTexte.\nDeuxième partie\nI\nTexte.\nII\nTexte."))
+        assertEquals(listOf("Première partie","I","II","Deuxième partie","I","II"),titres("Première partie\nI\nTexte.\nSuite.\nII\nTexte.\nSuite.\nDeuxième partie\nI\nTexte.\nSuite.\nII\nTexte.\nSuite."))
         assertEquals(listOf("Chapitre 1"),titres("Chapitre 1\nTexte.\nPartie depuis trois jours.\nLivre-moi ça.\nTexte."))
-        assertEquals(listOf("1","2","– 3 –"),titres("1\n\nTexte.\n\n2\n\nTexte.\n– 3 –\nTexte."))
+        assertEquals(listOf("1","2","– 3 –"),titres("1\n\nTexte.\nSuite.\n\n2\n\nTexte.\nSuite.\n– 3 –\nTexte.\nSuite."))
         assertEquals(listOf("Sommaire","Chapitre 1 La neige"),titres("Sommaire\nChapitre 1 La neige 7\n\nChapitre 1 La neige\nTexte."))
         assertEquals(listOf("Chapitre 1","Chapitre 2","Chapitre 12"),titres("Chapitre 1\nTexte.\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nChapitre 12\nTexte."))
-        val s="Texte.\n1\n\nChapitre 1\nTexte.\n2"
-        assertEquals(listOf("Chapitre 1"),Reperes.chapitresDevines(s,listOf(0,s.indexOf("Chapitre"))).map{it.titre})
+        assertEquals(listOf<String>("Première partie","1","2","3","Deuxième partie","4","5"),titres("Première partie\n1\nTexte.\nSuite.\nFin.\n2\nTexte.\nSuite.\nFin.\n3\nTexte.\nSuite.\nFin.\nDeuxième partie\n4\nTexte.\nSuite.\nFin.\n5\nTexte.\nSuite.\nFin.\n"))
+        assertEquals(listOf<String>(),titres("Préparation\n1\n\nCouper.\n\n2\n\nCuire.\n\n3\n\nServir."))
+        assertEquals(listOf<String>("Chapitre 1","Chapitre premier"),titres("Chapitre 1\nTexte.\nLivre a été publié.\nPartie un peu tôt.\nTome deux arrive.\nChapitre premier\nTexte."))
+        assertEquals(listOf<String>(),titres("Il dit :\nUN\nTexte.\nSuite."))
+        assertEquals(listOf<String>(),titres("Une ligne.\nUne autre.\nEncore une.\nEt une.\n1\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n2\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n3\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n4\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n5\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n6\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n7\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n8\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n9\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n10\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n11\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n12\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n13\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n14\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n15\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n16\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n17\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n18\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n19\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n20\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n21\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n22\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n23\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n24\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n25\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n26\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n27\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n28\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n29\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n30\n"))
+        val s=(1..6).joinToString(""){"Texte.\nSuite.\nFin.\n$it\n"}
+        assertEquals(emptyList<Titre>(),Reperes.chapitresDevines(s,(0 until 6).map{s.indexOf("Texte",it*(s.length/6))}))
         // recherche d'un signet : la ligne qui est le titre, pas sa première mention
         val t="Il pense au soir.\nLe soir\nTexte."
         assertEquals(t.indexOf("Le soir"),Reperes.chercher(t,"le soir",0,t.length))

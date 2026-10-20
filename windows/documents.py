@@ -147,7 +147,7 @@ _NOMBRES_MOTS = ('UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT',
 # chiffre seul sur sa ligne, eventuellement entre tirets : « 3 », « – 3 – »
 _RE_NOMBRE_SEUL = re.compile('^(?:[–—-]' + _E + '*)?([0-9]{1,3})(?:' + _E + '*[–—-])?$')
 # apres « Chapitre », « Partie »... : un numero, un nombre en lettres, une ponctuation, ou rien
-_RE_SUITE_LONG = re.compile('(?i)^(?:$|' + _E + '*[:.–—-](?:$|' + _E + ')|' + _E + r'+(?:[0-9]{1,4}|[ivxlc]{1,7}|[a-z]|premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)(?=$|' + _E + '|[.:)–—,-]))')
+_RE_SUITE_LONG = re.compile('^(?:$|' + _E + '*[:.–—-](?:$|' + _E + ')|' + _E + r'+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|' + _E + '|[.:)–—,-])|' + _E + r'+(?i:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)' + _E + '*(?:$|[.:–—-]))')
 
 
 def chapitres_devines(texte, pages=None):
@@ -155,7 +155,7 @@ def chapitres_devines(texte, pages=None):
     « Introduction », « II. La methode », « III » ou « 3 » seuls... Lignes courtes seulement.
     Ecartes : entrees d'une table imprimee (pointilles, ou suite de lignes finissant
     par un numero de page), listes (lignes numerotees de meme niveau qui se suivent),
-    phrases ; numeros seuls en haut ou en bas d'une page (pages = debuts des pages, PDF).
+    phrases, numeros de page (pages = debuts des pages quand on les connait).
     Meme regle dans Reperes.kt. -> [(titre, niveau, position)]"""
     lignes = texte.split('\n')
     nets = [_nettoyer(l) for l in lignes]
@@ -167,20 +167,11 @@ def chapitres_devines(texte, pages=None):
             j += pas
         return j if 0 <= j < len(nets) else None
     fin_nombre = [bool(_RE_FIN_NOMBRE.search(s)) for s in nets]
-    # lignes en bord de page (premiere ou derniere ligne non vide) : numeros de page probables
-    bord = set()
-    if pages:
-        import bisect
-        debuts_lignes, pos = [], 0
-        for l in lignes:
-            debuts_lignes.append(pos)
-            pos += len(l) + 1
-        page_de = [bisect.bisect_right(pages, d) for d in debuts_lignes]
-        for k in range(len(lignes)):
-            if nets[k]:
-                av, ap = voisin(k, -1), voisin(k, 1)
-                if av is None or page_de[av] != page_de[k] or ap is None or page_de[ap] != page_de[k]:
-                    bord.add(k)
+    rang, n_ = [], 0   # rang parmi les lignes non vides
+    for s in nets:
+        rang.append(n_)
+        n_ += 1 if s else 0
+    seuls = {'nombre': [], 'seul': [], 'mot': []}   # numeros seuls acceptes, verifies apres coup
     res, pos = [], 0   # (titre, niveau, position, ligne)
     majeur = {'arabe': 0, 'romain': 0, 'seul': 0, 'nombre': 0, 'mot': 0}
     for k, ligne in enumerate(lignes):
@@ -213,12 +204,11 @@ def chapitres_devines(texte, pages=None):
             r = _RE_ROMAIN_SEUL.match(s)
             c = _RE_NOMBRE_SEUL.match(s)
             if r or c or s in _NOMBRES_MOTS:
-                if k in bord:
-                    continue
                 sorte, v = ('seul', _romain(r.group(1))) if r else ('nombre', int(c.group(1))) if c else ('mot', _NOMBRES_MOTS.index(s) + 1)
-                if v == majeur[sorte] + 1:
+                if v == majeur[sorte] + 1 or v == 1:   # suite, ou numerotation qui repart (nouvelle partie)
                     majeur[sorte] = v
                     res.append((s, 2, ici, k))
+                    seuls[sorte].append(k)
                 continue
             n = numero[k]
             if not n or mots > 12 or s[-1] in '.:' or suite_table:
@@ -232,17 +222,28 @@ def chapitres_devines(texte, pages=None):
                 continue
             sorte = 'arabe' if num[0].isdigit() else 'romain'
             v = int(num) if sorte == 'arabe' else _romain(num)
-            if v == majeur[sorte] + 1:
+            if v == majeur[sorte] + 1 or v == 1:
                 majeur[sorte] = v
                 res.append((s, 2, ici, k))
+    # Numeros seuls (« 3 », « III », « TROIS ») : ecartes en bloc s'ils ressemblent a autre chose qu'a des chapitres :
+    # un seul ; moins de 3 lignes entre deux (etapes d'une recette, liste) ; un sur deux pages ou plus d'un PDF,
+    # ou ecarts tres reguliers (numeros de page d'un texte colle).
+    ecartes = set()
+    for sorte, ks in seuls.items():
+        if not ks:
             continue
-        if res[-1][1] == 1:
-            for x in majeur:   # nouvelle partie : la numerotation des chapitres repart
-                majeur[x] = 0
-    # numeros seuls trop rapproches (moins de 1500 caracteres en moyenne) : numeros de page, pas des chapitres
-    seuls = [x for x in res if _RE_NOMBRE_SEUL.match(x[0])]
-    if len(seuls) >= 10 and (seuls[-1][2] - seuls[0][2]) / (len(seuls) - 1) < 1500:
-        res = [x for x in res if not _RE_NOMBRE_SEUL.match(x[0])]
+        ecarts = sorted(rang[b] - rang[a] for a, b in zip(ks, ks[1:]))
+        # chiffres et nombres en lettres : moins de 3 lignes entre deux = etapes d'une liste (pas les chiffres romains seuls)
+        mauvais = len(ks) < 2 or (sorte != 'seul' and ecarts[len(ecarts) // 2] < 3)
+        if pages and len(ks) >= 5 and 2 * len(ks) >= len(pages):
+            mauvais = True
+        if len(ecarts) >= 7:
+            moy = sum(ecarts) / len(ecarts)
+            if (sum((e - moy) ** 2 for e in ecarts) / len(ecarts)) ** 0.5 < 0.25 * moy:
+                mauvais = True
+        if mauvais:
+            ecartes.update(ks)
+    res = [x for x in res if x[3] not in ecartes]
     # Doublons. 1) meme titre repete sans autre titre entre (en-tete courant) : garder le premier.
     # 2) table imprimee (au moins 3 titres sur des lignes qui se suivent, ou suite d'un « Sommaire ») :
     #    retirer ses entrees qui reapparaissent plus loin dans le livre.
@@ -434,11 +435,11 @@ def docx_reperes(root, styles=None):
         pos += len(s) + 1
     texte = '\n'.join(parties)
     pages = sorted(set(x for x in pages if x < max(1, len(texte))))
-    source = 'titres'
-    if not table:
-        table, source = chapitres_devines(texte), 'devinee'
     if len(pages) < 2:
         pages = []
+    source = 'titres'
+    if not table:
+        table, source = chapitres_devines(texte, pages), 'devinee'
     return texte, _sortie(texte, [(str(i + 1), x) for i, x in enumerate(pages)], table, source)
 
 
@@ -461,11 +462,11 @@ def odt_reperes(root):
         parties.append(s)
         pos += len(s) + 1
     texte = '\n'.join(parties)
-    source = 'titres'
-    if not table:
-        table, source = chapitres_devines(texte), 'devinee'
     if len(pages) < 2:
         pages = []
+    source = 'titres'
+    if not table:
+        table, source = chapitres_devines(texte, pages), 'devinee'
     return texte, _sortie(texte, [(str(i + 1), x) for i, x in enumerate(pages)], table, source)
 
 

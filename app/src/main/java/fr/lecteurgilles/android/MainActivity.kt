@@ -111,7 +111,7 @@ class MainActivity : Activity() {
                 val o=org.json.JSONObject().put("empreinte",h).put("source",r.source)
                 o.put("pages",org.json.JSONArray().apply{r.pages.forEach{put(org.json.JSONArray().put(it.first).put(it.second))}})
                 o.put("table",org.json.JSONArray().apply{r.table.forEach{put(org.json.JSONArray().put(it.titre).put(it.niveau).put(it.debut))}})
-                synchronized(reperesFile){reperesFile.writeText(o.toString())}
+                synchronized(reperesFile){ if(reperesHash==h)reperesFile.writeText(o.toString()) }   // une écriture plus ancienne ne remplace pas la dernière
             }catch(_:Exception){}
         }.start()
     }
@@ -125,7 +125,10 @@ class MainActivity : Activity() {
         if(annoncer)status.text="Repérage des chapitres…"
         Thread{
             val r=try{Reperes(emptyList(),Reperes.chapitresDevines(texte),"devinee")}catch(_:Throwable){Reperes(emptyList(),emptyList(),"devinee")}
-            ui{if(g==reperage && empreinte(editor.text)==h){setReperes(r,h);apres(r)}}
+            ui{
+                if(g==reperage && empreinte(editor.text)==h){setReperes(r,h);apres(r)}
+                else if(annoncer && g==reperage)status.text="Le texte a changé pendant le repérage : touchez à nouveau « ☰ Aller à… »."
+            }
         }.start()
     }
     private fun loadReperes(){

@@ -158,13 +158,14 @@ class Lecteur : Form {
         } catch(Exception) {}
     }
     /// Reperes du texte affiche : ceux du document importe, sinon chapitres devines par documents.py.
-    string echecReperes;
+    string echecReperes; DateTime heureEchec;
     bool ReperesAJour() {
         if(empreinteReperes!=null && empreinteReperes==EmpreinteActuelle())return true;
         // reperes d'un autre texte : jamais affiches, meme si documents.py echoue
         pageEtiquettes=new string[0];pageDebuts=new int[0];tableTitres=new string[0];tableNiveaux=new int[0];tableDebuts=new int[0];sourceTable="";empreinteReperes=null;
-        if(echecReperes!=null && echecReperes==EmpreinteActuelle())return false;   // deja essaye sans succes pour ce texte : ne pas refaire attendre
-        echecReperes=EmpreinteActuelle();
+        // deja essaye sans succes pour ce texte il y a moins d'une minute : ne pas refaire attendre
+        if(echecReperes!=null && echecReperes==EmpreinteActuelle() && (DateTime.Now-heureEchec).TotalSeconds<60)return false;
+        echecReperes=EmpreinteActuelle();heureEchec=DateTime.Now;
         try {
             string entree=Path.Combine(temp,"texte-reperes.txt"),sortie=Path.Combine(temp,"reperes.json");
             File.WriteAllText(entree,texte.Text,new UTF8Encoding(false));if(File.Exists(sortie))File.Delete(sortie);

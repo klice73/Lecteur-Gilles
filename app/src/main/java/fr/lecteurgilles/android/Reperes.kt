@@ -68,10 +68,10 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
         private val NOMBRES_MOTS=listOf("UN","DEUX","TROIS","QUATRE","CINQ","SIX","SEPT","HUIT","NEUF","DIX","ONZE","DOUZE",
             "TREIZE","QUATORZE","QUINZE","SEIZE","DIX-SEPT","DIX-HUIT","DIX-NEUF","VINGT")
         private val nombreSeul=Regex("(?d)^(?:[–—-]$E*)?([0-9]{1,3})(?:$E*[–—-])?$")
-        private val suiteLong=Regex("(?d)^(?:$|$E*[:.–—-](?:$|$E)|$E+(?:[0-9]{1,4}|[ivxlc]{1,7}|[a-z]|premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)(?=$|$E|[.:)–—,-]))",RegexOption.IGNORE_CASE)
+        private val suiteLong=Regex("(?d)^(?:$|$E*[:.–—-](?:$|$E)|$E+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|$E|[.:)–—,-])|$E+(?iu:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)$E*(?:$|[.:–—-]))")
         private data class Trouve(val titre:String,val niveau:Int,val debut:Int,val ligne:Int)
         /** Titres reconnus dans un texte sans table (« Chapitre 3 », « Première partie », « III » ou « 3 » seuls…).
-         *  pages : débuts des pages (PDF) ; un numéro seul en haut ou en bas d'une page n'est pas un titre. */
+         *  pages : débuts des pages quand on les connaît (numéros de page écartés). */
         fun chapitresDevines(texte:String,pages:List<Int>?=null):List<Titre> {
             val lignes=texte.split('\n')
             val nets=lignes.map{nettoyer(it)}
@@ -87,18 +87,9 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                 }
                 return false
             }
-            val bord=HashSet<Int>()
-            if(!pages.isNullOrEmpty()){
-                val tri=pages.sorted()
-                fun pageDe(x:Int):Int{var bas=0;var haut=tri.size;while(bas<haut){val m=(bas+haut)/2;if(tri[m]<=x)bas=m+1 else haut=m};return bas}
-                val debutsLignes=IntArray(lignes.size); var q=0
-                for((k,l) in lignes.withIndex()){debutsLignes[k]=q;q+=l.length+1}
-                val pageDeLigne=debutsLignes.map{pageDe(it)}
-                for(k in lignes.indices) if(nets[k].isNotEmpty()){
-                    val av=voisin(k,-1); val ap=voisin(k,1)
-                    if(av==null || pageDeLigne[av]!=pageDeLigne[k] || ap==null || pageDeLigne[ap]!=pageDeLigne[k])bord.add(k)
-                }
-            }
+            val rang=IntArray(nets.size); var nonVides=0   // rang parmi les lignes non vides
+            for((k,s) in nets.withIndex()){rang[k]=nonVides;if(s.isNotEmpty())nonVides++}
+            val seuls=linkedMapOf("nombre" to ArrayList<Int>(),"seul" to ArrayList<Int>(),"mot" to ArrayList<Int>())   // vérifiés après coup
             var res=ArrayList<Trouve>()
             val majeur=hashMapOf("arabe" to 0,"romain" to 0,"seul" to 0,"nombre" to 0,"mot" to 0)
             var pos=0
@@ -126,9 +117,8 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                 }else{
                     val r=romainSeul.find(s); val c=nombreSeul.find(s)
                     if(r!=null || c!=null || s in NOMBRES_MOTS){
-                        if(k in bord)continue
                         val (sorte,v)=if(r!=null) "seul" to romain(r.groupValues[1]) else if(c!=null) "nombre" to c.groupValues[1].toInt() else "mot" to NOMBRES_MOTS.indexOf(s)+1
-                        if(v==majeur.getValue(sorte)+1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
+                        if(v==majeur.getValue(sorte)+1 || v==1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k));seuls.getValue(sorte).add(k)}   // suite, ou numérotation qui repart
                         continue
                     }
                     val n=num[k]
@@ -141,15 +131,25 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                     }
                     val sorte=if(nb[0].isDigit()) "arabe" else "romain"
                     val v=if(sorte=="arabe") nb.toInt() else romain(nb)
-                    if(v==majeur.getValue(sorte)+1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
-                    continue
+                    if(v==majeur.getValue(sorte)+1 || v==1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
                 }
-                if(res.last().niveau==1) for(x in majeur.keys.toList())majeur[x]=0   // nouvelle partie : la numérotation repart
             }
-            // numéros seuls trop rapprochés (moins de 1500 caractères en moyenne) : numéros de page
-            val seuls=res.filter{nombreSeul.find(it.titre)!=null}
-            if(seuls.size>=10 && (seuls.last().debut-seuls.first().debut).toDouble()/(seuls.size-1)<1500)
-                res=ArrayList(res.filter{nombreSeul.find(it.titre)==null})
+            // Numéros seuls (« 3 », « III », « TROIS ») écartés en bloc s'ils ressemblent à autre chose qu'à des chapitres :
+            // un seul ; moins de 3 lignes entre deux (recette, liste) ; un sur deux pages ou plus ; écarts très réguliers.
+            val ecartes=HashSet<Int>()
+            for((sorte,ks) in seuls){
+                if(ks.isEmpty())continue
+                val ecarts=ks.zipWithNext{a,b->rang[b]-rang[a]}.sorted()
+                // chiffres et nombres en lettres : moins de 3 lignes entre deux = étapes d'une liste (pas les chiffres romains seuls)
+                var mauvais=ks.size<2 || (sorte!="seul" && ecarts[ecarts.size/2]<3)
+                if(pages!=null && pages.isNotEmpty() && ks.size>=5 && 2*ks.size>=pages.size)mauvais=true
+                if(ecarts.size>=7){
+                    val moy=ecarts.sum().toDouble()/ecarts.size
+                    if(Math.sqrt(ecarts.sumOf{(it-moy)*(it-moy)}/ecarts.size)<0.25*moy)mauvais=true
+                }
+                if(mauvais)ecartes.addAll(ks)
+            }
+            res=ArrayList(res.filter{it.ligne !in ecartes})
             // Doublons. 1) même titre répété sans autre titre entre (en-tête courant) : garder le premier.
             // 2) table imprimée (au moins 3 titres sur des lignes qui se suivent, ou suite d'un « Sommaire ») :
             //    retirer ses entrées qui réapparaissent plus loin dans le livre.

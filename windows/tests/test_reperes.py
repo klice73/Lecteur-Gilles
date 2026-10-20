@@ -45,7 +45,7 @@ verifier('code.md', [], [('Vrai titre', 1), ('Second', 2)], 'titres')
 for titre_seul in ('Chapitre 3', 'CHAPITRE 12', 'Partie 2', 'Annexe 1', 'Chapitre 1 : Le lac num\u00e9ro 1'):
     g = D.reperes_texte('Texte avant.\n' + titre_seul + '\nTexte apres.')
     assert [x[0] for x in g['table']] == [titre_seul], (titre_seul, g['table'])
-g = D.reperes_texte('Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nII\nDeux.')
+g = D.reperes_texte('Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nEncore.\nII\nDeux.\nEncore.')
 assert [x[0] for x in g['table']] == ['Sommaire', 'Chapitre 1 La neige', 'I', 'II'], g['table']
 g = D.reperes_texte('1. Introduction\nTexte :\n1. Un\n2. Deux\n3. Trois\n2. Portrait\n2.1 D\u00e9tails\nTexte.\n3. Fin\nTexte.')
 assert [x[0] for x in g['table']] == ['1. Introduction', '2. Portrait', '2.1 D\u00e9tails', '3. Fin'], g['table']
@@ -53,13 +53,18 @@ g = D.reperes_texte('Ingr\u00e9dients\n1 L de bouillon\nConclusion : ils \u00e9t
 assert [x[0] for x in g['table']] == ['Notes'], g['table']
 # contre-audit : parties qui renumerotent, faux titres, chiffres seuls, table imprimee, en-tete courant
 assert [x[0] for x in D.reperes_texte('Première partie\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nDeuxième partie\nChapitre 1\nTexte.\nChapitre 2\nTexte.')['table']] == ['Première partie', 'Chapitre 1', 'Chapitre 2', 'Deuxième partie', 'Chapitre 1', 'Chapitre 2']
-assert [x[0] for x in D.reperes_texte('Première partie\nI\nTexte.\nII\nTexte.\nDeuxième partie\nI\nTexte.\nII\nTexte.')['table']] == ['Première partie', 'I', 'II', 'Deuxième partie', 'I', 'II']
+assert [x[0] for x in D.reperes_texte('Première partie\nI\nTexte.\nSuite.\nII\nTexte.\nSuite.\nDeuxième partie\nI\nTexte.\nSuite.\nII\nTexte.\nSuite.')['table']] == ['Première partie', 'I', 'II', 'Deuxième partie', 'I', 'II']
 assert [x[0] for x in D.reperes_texte('Chapitre 1\nTexte.\nPartie depuis trois jours.\nLivre-moi ça.\nTexte.')['table']] == ['Chapitre 1']
-assert [x[0] for x in D.reperes_texte('1\n\nTexte.\n\n2\n\nTexte.\n– 3 –\nTexte.')['table']] == ['1', '2', '– 3 –']
+assert [x[0] for x in D.reperes_texte('1\n\nTexte.\nSuite.\n\n2\n\nTexte.\nSuite.\n– 3 –\nTexte.\nSuite.')['table']] == ['1', '2', '– 3 –']
 assert [x[0] for x in D.reperes_texte('Sommaire\nChapitre 1 La neige 7\n\nChapitre 1 La neige\nTexte.')['table']] == ['Sommaire', 'Chapitre 1 La neige']
 assert [x[0] for x in D.reperes_texte('Chapitre 1\nTexte.\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nChapitre 12\nTexte.')['table']] == ['Chapitre 1', 'Chapitre 2', 'Chapitre 12']
-s = 'Texte.\n1\n\nChapitre 1\nTexte.\n2'
-assert [x[0] for x in D.chapitres_devines(s, [0, s.index('Chapitre')])] == ['Chapitre 1']   # numeros de page
+assert [x[0] for x in D.reperes_texte('Première partie\n1\nTexte.\nSuite.\nFin.\n2\nTexte.\nSuite.\nFin.\n3\nTexte.\nSuite.\nFin.\nDeuxième partie\n4\nTexte.\nSuite.\nFin.\n5\nTexte.\nSuite.\nFin.\n')['table']] == ['Première partie', '1', '2', '3', 'Deuxième partie', '4', '5']
+assert [x[0] for x in D.reperes_texte('Préparation\n1\n\nCouper.\n\n2\n\nCuire.\n\n3\n\nServir.')['table']] == []
+assert [x[0] for x in D.reperes_texte('Chapitre 1\nTexte.\nLivre a été publié.\nPartie un peu tôt.\nTome deux arrive.\nChapitre premier\nTexte.')['table']] == ['Chapitre 1', 'Chapitre premier']
+assert [x[0] for x in D.reperes_texte('Il dit :\nUN\nTexte.\nSuite.')['table']] == []
+assert [x[0] for x in D.reperes_texte('Une ligne.\nUne autre.\nEncore une.\nEt une.\n1\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n2\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n3\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n4\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n5\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n6\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n7\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n8\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n9\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n10\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n11\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n12\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n13\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n14\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n15\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n16\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n17\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n18\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n19\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n20\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n21\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n22\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n23\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n24\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n25\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n26\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n27\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n28\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n29\nUne ligne.\nUne autre.\nEncore une.\nEt une.\n30\n')['table']] == []
+s = ''.join('Texte.\nSuite.\nFin.\n%d\n' % n for n in range(1, 7))
+assert D.chapitres_devines(s, [s.index('Texte', i) for i in range(0, len(s), len(s) // 6)][:6]) == []   # numeros de page d'un PDF
 g = D.reperes_markdown('````\n```\n# Pas un titre\n````\n# Vrai')
 assert [x[0] for x in g['table']] == ['Vrai'], g['table']
 print('reperes : tous les tests reussis')
