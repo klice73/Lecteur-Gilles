@@ -17,3 +17,17 @@ for avant, apres in cas.items():
     assert L.appliquer_lexique(avant, motif, table) == apres, (avant, L.appliquer_lexique(avant, motif, table))
 assert L.appliquer_lexique("Bateson", *L.motif_lexique([])) == "Bateson"
 print('lexique : tous les tests reussis')
+# apostrophe typographique, BOM, fichier ANSI (audit 1.8)
+m2, t2 = L.motif_lexique(L.lire_lexique("﻿Freire's = Fréïré\nBateson = Bétsonne"))
+assert L.appliquer_lexique("Freire’s book, Freire's, Bateson", m2, t2) == "Fréïré book, Fréïré, Bétsonne"
+import tempfile, os
+d = tempfile.mkdtemp()
+ancien = L.ROOT
+try:
+    L.ROOT = Path(d)
+    (Path(d) / 'prononciations.txt').write_bytes('Bateson = B\xe9tsonne\n'.encode('cp1252'))
+    m3, t3 = L.charger_lexique()
+    assert L.appliquer_lexique("Bateson", m3, t3) == "Bétsonne"
+finally:
+    L.ROOT = ancien
+print('lexique (audit) : tous les tests reussis')

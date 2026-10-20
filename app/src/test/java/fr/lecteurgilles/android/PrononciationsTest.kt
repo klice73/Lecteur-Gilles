@@ -12,5 +12,7 @@ class PrononciationsTest {
         assertEquals("Paulo Fréïré, l'œuvre de Fréïré",p.appliquer("Paulo Freire, l'œuvre de Freire"))
         assertEquals("Rien à changer.",p.appliquer("Rien à changer."))
         assertEquals("Bateson",Prononciations.lire("").appliquer("Bateson"))
+        // apostrophe typographique et BOM (audit 1.8), comme test_lexique.py
+        assertEquals("Fréïré book, Fréïré, Bétsonne",Prononciations.lire("\uFEFFFreire's = Fréïré\nBateson = Bétsonne").appliquer("Freire’s book, Freire's, Bateson"))
     }
 }

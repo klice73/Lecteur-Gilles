@@ -6,7 +6,7 @@ package fr.lecteurgilles.android
  * compte des majuscules, première ligne gagnante. Seule la voix change : le texte affiché reste intact.
  */
 class Prononciations private constructor(private val motif:Regex?,private val table:Map<String,String>) {
-    fun appliquer(texte:String):String = motif?.replace(texte){table[it.value.lowercase(java.util.Locale.ROOT)]?:it.value} ?: texte
+    fun appliquer(texte:String):String = motif?.replace(texte){table[it.value.replace('\u2019','\'').lowercase(java.util.Locale.ROOT)]?:it.value} ?: texte
     val taille get()=table.size
     companion object {
         private const val LETTRES="0-9A-Za-z\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u024f"
@@ -16,13 +16,13 @@ class Prononciations private constructor(private val motif:Regex?,private val ta
         fun lire(contenu:String):Prononciations {
             val table=LinkedHashMap<String,String>()
             for(brute in contenu.replace("\r","").split('\n')){
-                val ligne=brute.trim()
+                val ligne=brute.trim().trimStart('\uFEFF').trim()
                 if(ligne.isEmpty() || ligne.startsWith("#") || '=' !in ligne)continue
                 val mot=ligne.substringBefore('=').trim(); val dire=ligne.substringAfter('=').trim()
-                if(mot.isNotEmpty() && dire.isNotEmpty())table.putIfAbsent(mot.lowercase(java.util.Locale.ROOT),dire)
+                if(mot.isNotEmpty() && dire.isNotEmpty())table.putIfAbsent(mot.replace('\u2019','\'').lowercase(java.util.Locale.ROOT),dire)   // ’ = '
             }
             if(table.isEmpty())return Prononciations(null,table)
-            val alternatives=table.keys.sortedByDescending{it.length}.joinToString("|"){Regex.escape(it)}
+            val alternatives=table.keys.sortedByDescending{it.length}.joinToString("|"){k->k.split('\'').joinToString("['\u2019]"){Regex.escape(it)}}
             return Prononciations(Regex("(?<![$LETTRES])(?:$alternatives)(?![$LETTRES])",setOf(RegexOption.IGNORE_CASE)),table)
         }
     }

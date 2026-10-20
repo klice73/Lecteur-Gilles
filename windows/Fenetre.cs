@@ -272,7 +272,13 @@ class Lecteur : Form {
     const string EnteteLexique="# Lexique de prononciation de Gilles\r\n# Une ligne par mot :  mot = comment Gilles doit le dire\r\n# Ecrivez la prononciation comme un mot francais (accents permis). Exemples :\r\n#   Bateson = Bétsonne\r\n#   POETICS-S = Poétixe esse\r\n# Mot entier seulement, majuscules ou non. Les lignes qui commencent par # sont ignorées.\r\n# Le texte affiché ne change pas ; seule la voix est corrigée.\r\n\r\n";
     void EditerLexique() {
         string fichier=Path.Combine(racine,"prononciations.txt");
-        string contenu=File.Exists(fichier)?File.ReadAllText(fichier,Encoding.UTF8):EnteteLexique;
+        string contenu=EnteteLexique;
+        if(File.Exists(fichier)) {
+            byte[] brut=File.ReadAllBytes(fichier);
+            // UTF-8 (avec ou sans BOM) ; sinon « ANSI » du Bloc-notes, pour ne pas abimer les accents
+            try {contenu=new UTF8Encoding(false,true).GetString(brut);if(contenu.Length>0 && contenu[0]=='\uFEFF')contenu=contenu.Substring(1);}
+            catch(DecoderFallbackException) {contenu=Encoding.Default.GetString(brut);}
+        }
         using(var f=new Form {Text="Prononciations de Gilles",Size=new Size(700,560),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,Font=Font}) {
             var aide=new Label {Text="Une ligne par mot : mot = comment le dire. Exemple : Bateson = Bétsonne. Pour ajouter le mot sélectionné dans le texte, cliquez sur « Ajouter la sélection ».",Dock=DockStyle.Top,Height=48};
             var zone=new TextBox {Multiline=true,ScrollBars=ScrollBars.Both,Dock=DockStyle.Fill,Font=new Font("Consolas",11),AcceptsReturn=true,WordWrap=false,Text=contenu.Replace("\r\n","\n").Replace("\n","\r\n")};

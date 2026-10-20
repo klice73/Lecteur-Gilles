@@ -232,7 +232,7 @@ def lire_lexique(texte):
     """[(mot, prononciation)] depuis le contenu du fichier lexique."""
     res = []
     for ligne in texte.replace('\r', '').split('\n'):
-        ligne = ligne.strip()
+        ligne = ligne.strip().lstrip('\ufeff').strip()
         if not ligne or ligne.startswith('#') or '=' not in ligne:
             continue
         mot, dire = (x.strip() for x in ligne.split('=', 1))
@@ -246,8 +246,8 @@ def motif_lexique(lexique):
         return None, {}
     table = {}
     for mot, dire in lexique:
-        table.setdefault(mot.lower(), dire)   # premiere ligne gagnante
-    alternatives = '|'.join(re.escape(m) for m in sorted(table, key=len, reverse=True))
+        table.setdefault(mot.replace('\u2019', "'").lower(), dire)   # premiere ligne gagnante ; ’ = '
+    alternatives = '|'.join(re.escape(m).replace("'", "['\u2019]") for m in sorted(table, key=len, reverse=True))
     motif = re.compile('(?<![' + _LETTRES + '])(?:' + alternatives + ')(?![' + _LETTRES + '])', re.I)
     return motif, table
 
@@ -255,14 +255,22 @@ def motif_lexique(lexique):
 def appliquer_lexique(texte, motif, table):
     if motif is None:
         return texte
-    return motif.sub(lambda m: table.get(m.group(0).lower(), m.group(0)), texte)
+    return motif.sub(lambda m: table.get(m.group(0).replace('\u2019', "'").lower(), m.group(0)), texte)
 
 
 def charger_lexique():
     f = ROOT / 'prononciations.txt'
     try:
-        return motif_lexique(lire_lexique(f.read_text(encoding='utf-8-sig')))
+        brut = f.read_bytes()
     except OSError:
+        return None, {}
+    try:
+        contenu = brut.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        contenu = brut.decode('cp1252', errors='replace')   # enregistre en « ANSI » par le Bloc-notes
+    try:
+        return motif_lexique(lire_lexique(contenu))
+    except Exception:   # un lexique abime ne doit jamais empecher la lecture
         return None, {}
 # ---------------------------------------------------------------------------
 
