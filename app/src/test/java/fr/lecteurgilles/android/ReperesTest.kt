@@ -13,6 +13,22 @@ class ReperesTest {
         for(x in r)assertEquals(x.titre,t.substring(x.debut,x.debut+x.titre.length))
         assertEquals("Première partie : La forêt",Reperes.chapitresDevines("Intro.\nPremière partie : La forêt\nTexte.").single().titre)
     }
+    @Test fun casDeLAuditCommePython() {
+        // mêmes cas que windows/tests/test_reperes.py
+        fun titres(s:String)=Reperes.chapitresDevines(s).map{it.titre}
+        for(seul in listOf("Chapitre 3","CHAPITRE 12","Partie 2","Annexe 1","Chapitre 1 : Le lac numéro 1"))
+            assertEquals(listOf(seul),titres("Texte avant.\n$seul\nTexte apres."))
+        assertEquals(listOf("Sommaire","Chapitre 1 La neige","I","II"),
+            titres("Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nII\nDeux."))
+        assertEquals(listOf("1. Introduction","2. Portrait","2.1 Détails","3. Fin"),
+            titres("1. Introduction\nTexte :\n1. Un\n2. Deux\n3. Trois\n2. Portrait\n2.1 Détails\nTexte.\n3. Fin\nTexte."))
+        assertEquals(listOf("Notes"),titres("Ingrédients\n1 L de bouillon\nConclusion : ils étaient perdus, mais ensemble.\nNotes"))
+        // recherche d'un signet : la ligne qui est le titre, pas sa première mention
+        val t="Il pense au soir.\nLe soir\nTexte."
+        assertEquals(t.indexOf("Le soir"),Reperes.chercher(t,"le soir",0,t.length))
+        // table remise dans l'ordre du texte
+        assertEquals(listOf(5,9),Reperes(emptyList(),listOf(Titre("b",1,9),Titre("a",1,5)),"signets").table.map{it.debut})
+    }
     @Test fun pagesEtPositionCourante() {
         val r=Reperes(listOf("i" to 0,"ii" to 100,"1" to 200,"2" to 300),listOf(Titre("Chapitre 1",1,200),Titre("Chapitre 2",1,320)),"signets")
         assertEquals(100,r.debutPage("II"))

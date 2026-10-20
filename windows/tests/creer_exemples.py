@@ -55,4 +55,23 @@ def epub(nom, nav):
             z.writestr('OEBPS/toc.ncx', '<?xml version="1.0"?><ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap><navPoint id="a"><navLabel><text>Chapitre 1 : Le départ</text></navLabel><content src="texte/ch1.xhtml"/></navPoint><navPoint id="b"><navLabel><text>Chapitre 2 : Le retour</text></navLabel><content src="texte/ch2.xhtml"/></navPoint></navMap></ncx>')
 epub('livre3.epub', True); epub('livre2.epub', False)
 open('notes.md', 'w', encoding='utf-8').write('# Mon carnet\n\nIntro.\n\n## Lundi\n\nIl a neigé.\n\n## Mardi\n\nSoleil. \U0001F600\n')
+# EPUB : ancre vers un sous-titre deja present dans le texte, entree sans lien (span)
+with zipfile.ZipFile('ancres.epub', 'w') as z:
+    z.writestr('mimetype', 'application/epub+zip')
+    z.writestr('META-INF/container.xml', '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="livre.opf" media-type="application/oebps-package+xml"/></rootfiles></container>')
+    z.writestr('livre.opf', '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="ch1.xhtml" media-type="application/xhtml+xml"/><item id="c2" href="ch2.xhtml" media-type="application/xhtml+xml"/><item id="nav" href="nav/nav.xhtml" media-type="application/xhtml+xml" properties="nav"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>')
+    z.writestr('ch1.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Le d\u00e9part</h1><p>le soir tombait sur le village.</p><h2 id="s">Le soir</h2><p>Il faisait froid.</p></body></html>')
+    z.writestr('ch2.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Le retour</h1><p>Fin.</p></body></html>')
+    z.writestr('nav/nav.xhtml', '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><nav epub:type="toc"><ol><li><span>Premi\u00e8re partie</span><ol><li><a href="../ch1.xhtml">Le d\u00e9part</a><ol><li><a href="../ch1.xhtml#s">Le soir</a></li></ol></li></ol></li><li><a href="../ch2.xhtml">Le retour</a></li></ol></nav></body></html>')
+# DOCX : style personnalise avec niveau de plan dans styles.xml
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.enum.style import WD_STYLE_TYPE
+d = docx.Document()
+st = d.styles.add_style('MonGrandTitre', WD_STYLE_TYPE.PARAGRAPH)
+ppr = st.element.get_or_add_pPr(); lvl = OxmlElement('w:outlineLvl'); lvl.set(qn('w:val'), '0'); ppr.append(lvl)
+d.add_paragraph('Mon grand titre perso', style='MonGrandTitre'); d.add_paragraph(CORPS)
+d.add_heading('Un titre normal', level=2); d.add_paragraph(CORPS)
+d.save('style-perso.docx')
+open('code.md', 'w', encoding='utf-8').write('# Vrai titre\n\n```python\n# pas un titre\nx = 1\n```\n\n## Second\n')
 print('exemples crees')

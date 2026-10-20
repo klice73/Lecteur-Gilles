@@ -37,4 +37,18 @@ assert [x[0] for x in g['table']] == ['Table des mati√®res', 'Chapitre 1 La for√
 u = t.encode('utf-16-le')
 for titre, _, o in g['table']:
     assert u[2 * o:2 * (o + len(titre))].decode('utf-16-le') == titre, (titre, o)
+# constats de l'audit 1.6
+r = verifier('ancres.epub', [], [('Le d\u00e9part', 2), ('Le soir', 3), ('Le retour', 1)], 'table du livre')
+assert lire(r, r['table'][1][2], 7) == 'Le soir' and lire(r, r['table'][1][2] - 1, 1) == '\n', 'ancre : titre et non premiere occurrence'
+verifier('style-perso.docx', [], [('Mon grand titre perso', 1), ('Un titre normal', 2)], 'titres')
+verifier('code.md', [], [('Vrai titre', 1), ('Second', 2)], 'titres')
+for titre_seul in ('Chapitre 3', 'CHAPITRE 12', 'Partie 2', 'Annexe 1', 'Chapitre 1 : Le lac num\u00e9ro 1'):
+    g = D.reperes_texte('Texte avant.\n' + titre_seul + '\nTexte apres.')
+    assert [x[0] for x in g['table']] == [titre_seul], (titre_seul, g['table'])
+g = D.reperes_texte('Sommaire\nChapitre 1 La neige 7\nChapitre 2 Le lac 19\n\nChapitre 1 La neige\nTexte.\nI\nUn.\nII\nDeux.')
+assert [x[0] for x in g['table']] == ['Sommaire', 'Chapitre 1 La neige', 'I', 'II'], g['table']
+g = D.reperes_texte('1. Introduction\nTexte :\n1. Un\n2. Deux\n3. Trois\n2. Portrait\n2.1 D\u00e9tails\nTexte.\n3. Fin\nTexte.')
+assert [x[0] for x in g['table']] == ['1. Introduction', '2. Portrait', '2.1 D\u00e9tails', '3. Fin'], g['table']
+g = D.reperes_texte('Ingr\u00e9dients\n1 L de bouillon\nConclusion : ils \u00e9taient perdus, mais ensemble.\nNotes')
+assert [x[0] for x in g['table']] == ['Notes'], g['table']
 print('reperes : tous les tests reussis')

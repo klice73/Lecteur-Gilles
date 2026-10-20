@@ -79,10 +79,24 @@ _MOTS_TITRE = ('chapitre', 'chap.', 'partie', 'livre', 'tome', 'section', 'annex
                'avant-propos', 'postface', 'remerciements', 'bibliographie', 'r\u00e9f\u00e9rences', 'glossaire',
                'sommaire', 'table des mati\u00e8res', 'r\u00e9sum\u00e9', 'lexique', 'notes')
 _NIVEAU_UN = ('partie', 'livre', 'tome')
-_RE_MOT_TITRE = re.compile(r'(?i)^(' + '|'.join(re.escape(m) for m in sorted(_MOTS_TITRE, key=len, reverse=True)) + r')(?=$|[\s.:,\u2013\u2014-])')
-_RE_ORDINAL = re.compile(r'(?i)^(?:premi[e\u00e8]re?|deuxi[e\u00e8]me|seconde?|troisi[e\u00e8]me|quatri[e\u00e8]me|cinqui[e\u00e8]me|sixi[e\u00e8]me|septi[e\u00e8]me|huiti[e\u00e8]me|neuvi[e\u00e8]me|dixi[e\u00e8]me|derni[e\u00e8]re?)\s+(partie|chapitre|livre|tome|section)(?=$|[\s.:,\u2013\u2014-])')
-_RE_NUMERO = re.compile(r'^([0-9]{1,2}(?:\.[0-9]{1,2}){0,2}|[IVXLC]{1,7})[.)]?\s+(?=[A-Z\u00c0-\u00dd])')
-_RE_FIN_PAGE = re.compile(r'(?:\.{2,}|\u2026|\s)\s*[0-9]{1,4}$')   # entree de table imprimee : « ... 12 »
+_LONGS = ('chapitre', 'chap.', 'partie', 'livre', 'tome', 'section', 'annexe', 'appendice')
+# Espaces reconnus : liste explicite, identique dans Reperes.kt (\s differe entre Python et Java).
+_ESP = ' \t    \x0b\x0c\x85'
+_E = '[' + _ESP + ']'
+_MOTS_RE = '|'.join(re.escape(m) for m in sorted(_MOTS_TITRE, key=len, reverse=True))
+_ORDINAUX = (r'premi[eè]re?|deuxi[eè]me|seconde?|troisi[eè]me|quatri[eè]me|cinqui[eè]me|'
+             r'sixi[eè]me|septi[eè]me|huiti[eè]me|neuvi[eè]me|dixi[eè]me|derni[eè]re?')
+_APRES = '(?=$|' + _E + r'|[.:,–—-])'
+_RE_MOT_TITRE = re.compile('(?i)^(' + _MOTS_RE + ')' + _APRES)
+_RE_ORDINAL = re.compile('(?i)^(?:' + _ORDINAUX + ')' + _E + '+(partie|chapitre|livre|tome|section)' + _APRES)
+# « Chapitre 3 », « Annexe A », « Partie II » seuls sur la ligne : toujours un titre
+_RE_TITRE_NU = re.compile('(?i)^(?:(?:' + _ORDINAUX + ')' + _E + '+)?(?:' + _MOTS_RE + ')' + _E + r'+([0-9]{1,3}|[ivxlc]{1,7}|[a-z])[.:]?$')
+# numero de titre : « 2. Portrait », « II) Methode », « 1 Introduction » (sans ponctuation : mot d'au moins 2 lettres)
+_RE_NUMERO = re.compile(r'^([0-9]{1,2}(?:\.[0-9]{1,2}){0,2}|[IVXLC]{1,7})(?:[.)]' + _E + '+|' + _E + '+(?=[A-ZÀ-Ý][^' + _ESP + r'.,]))(?=[A-ZÀ-Ý])')
+_RE_ROMAIN_SEUL = re.compile(r'^([IVXLC]{1,7})\.?$')
+_RE_POINTILLES = re.compile(r'(?:\.{2,}|…|\t)' + _E + r'*[0-9]{1,4}$')   # « ... 12 » : entree de table imprimee
+_RE_FIN_NOMBRE = re.compile(_E + r'[0-9]{1,4}$')
+_RE_ESPACES = re.compile(_E + '+')
 _ROMAINS = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100}
 
 
@@ -104,53 +118,108 @@ class Positions:
         return i + bisect.bisect_left(self.astraux, i)
 
 
+def _nettoyer(ligne):
+    return ligne.strip(_ESP + '\r')
+
+
+def _mots(s):
+    return len([m for m in _RE_ESPACES.split(s) if m])
+
+
+def _valeur(num):
+    """Valeur du dernier niveau d'un numero : « 2.3 » -> 3, « IV » -> 4."""
+    der = num.split('.')[-1]
+    return int(der) if der.isdigit() else _romain(der)
+
+
+def _dans_liste(k, numero, profondeur, av, ap):
+    v = _valeur(numero[k].group(1))
+    for j, pas in ((av, -1), (ap, 1)):
+        if j is not None and j == k + pas and numero[j] and profondeur[j] == profondeur[k] \
+                and numero[j].group(1)[0].isdigit() == numero[k].group(1)[0].isdigit() \
+                and _valeur(numero[j].group(1)) == v + pas:
+            return True
+    return False
+
+
 def chapitres_devines(texte):
-    """Titres reconnus dans un texte sans table : « Chapitre 3 », « Introduction »,
-    « II. La methode »... Lignes courtes seulement ; les entrees d'une table imprimee
-    (terminees par un numero de page) sont ignorees ; des lignes numerotees qui se
-    suivent sont une liste, pas des titres. -> [(titre, niveau, position)]"""
-    res, pos, majeur = [], 0, {'arabe': 0, 'romain': 0}
+    """Titres reconnus dans un texte sans table : « Chapitre 3 », « Premiere partie »,
+    « Introduction », « II. La methode », « III » seul... Lignes courtes seulement.
+    Ecartes : entrees d'une table imprimee (pointilles, ou suite de lignes finissant
+    par un numero de page), listes (lignes numerotees de meme niveau qui se suivent),
+    phrases. Meme regle dans Reperes.kt. -> [(titre, niveau, position)]"""
     lignes = texte.split('\n')
-    num = [bool(_RE_NUMERO.match(l.strip())) for l in lignes]
-    # lignes numerotees qui se suivent = liste (recette, enumeration) : pas des titres
-    liste = [num[k] and ((k > 0 and num[k - 1]) or (k + 1 < len(num) and num[k + 1])) for k in range(len(num))]
+    nets = [_nettoyer(l) for l in lignes]
+    numero = [_RE_NUMERO.match(s) for s in nets]
+    profondeur = [m.group(1).count('.') if m else -1 for m in numero]
+    def voisin(k, pas):
+        j = k + pas
+        while 0 <= j < len(nets) and not nets[j]:
+            j += pas
+        return j if 0 <= j < len(nets) else None
+    fin_nombre = [bool(_RE_FIN_NOMBRE.search(s)) for s in nets]
+    res, pos = [], 0
+    majeur = {'arabe': 0, 'romain': 0, 'seul': 0}
     for k, ligne in enumerate(lignes):
         debut = pos
         pos += len(ligne) + 1
-        s = ligne.strip()
-        if not (2 <= len(s) <= 90) or s[-1] in ',;' or _RE_FIN_PAGE.search(s):
+        s = nets[k]
+        if not (2 <= len(s) <= 90) and not _RE_ROMAIN_SEUL.match(s):
             continue
-        ici = debut + (len(ligne) - len(ligne.lstrip()))
-        m = _RE_MOT_TITRE.match(s) or _RE_ORDINAL.match(s)   # « Chapitre 3 », « Premiere partie »
+        if not s or s[-1] in ',;' or _RE_POINTILLES.search(s):
+            continue
+        av, ap = voisin(k, -1), voisin(k, 1)
+        suite_table = fin_nombre[k] and ((av is not None and fin_nombre[av]) or (ap is not None and fin_nombre[ap]))
+        ici = debut + (len(ligne) - len(ligne.lstrip(_ESP + '\r')))
+        mots = _mots(s)
+        if _RE_TITRE_NU.match(s):
+            m = _RE_MOT_TITRE.match(s) or _RE_ORDINAL.match(s)
+            mot = m.group(1).lower() if m else ''
+            res.append((s, 1 if mot in _NIVEAU_UN else 2, ici))
+            continue
+        m = _RE_MOT_TITRE.match(s) or _RE_ORDINAL.match(s)
         if m:
             mot = m.group(1).lower()
-            if mot not in ('chapitre', 'chap.', 'partie', 'livre', 'tome', 'section', 'annexe', 'appendice') and len(s) > 60:
+            if suite_table:
                 continue
-            if s.endswith('.') and len(s.split()) > 6:
+            if mot in _LONGS:
+                if s.endswith('.') and mots > 6:
+                    continue
+            elif len(s) > 60 or (s[-1] in '.!?' and mots > 2):
                 continue
             res.append((s, 1 if mot in _NIVEAU_UN else 2, ici))
             continue
-        m = None if liste[k] else _RE_NUMERO.match(s)
-        if m and len(s.split()) <= 12 and s[-1] not in '.:':
-            num = m.group(1)
-            sorte = 'arabe' if num[0].isdigit() else 'romain'
-            if '.' in num:
-                if majeur['arabe'] and int(num.split('.')[0]) == majeur['arabe']:
-                    res.append((s, 3, ici))
-                continue
-            v = int(num) if sorte == 'arabe' else _romain(num)
-            if v == majeur[sorte] + 1:
-                majeur[sorte] = v
+        r = _RE_ROMAIN_SEUL.match(s)
+        if r:
+            v = _romain(r.group(1))
+            if v == majeur['seul'] + 1:
+                majeur['seul'] = v
                 res.append((s, 2, ici))
+            continue
+        n = numero[k]
+        if not n or mots > 12 or s[-1] in '.:' or suite_table:
+            continue
+        if _dans_liste(k, numero, profondeur, av, ap):
+            continue   # liste : lignes numerotees qui se suivent (1, 2, 3...) au meme niveau
+        num = n.group(1)
+        if '.' in num:
+            if majeur['arabe'] and int(num.split('.')[0]) == majeur['arabe']:
+                res.append((s, 3, ici))
+            continue
+        sorte = 'arabe' if num[0].isdigit() else 'romain'
+        v = int(num) if sorte == 'arabe' else _romain(num)
+        if v == majeur[sorte] + 1:
+            majeur[sorte] = v
+            res.append((s, 2, ici))
     # meme titre deux fois (table imprimee puis corps du livre) : garder le dernier
     vus, final = {}, []
     for titre, niveau, p in res:
-        cle = ' '.join(titre.casefold().split())
+        cle = ' '.join(m for m in _RE_ESPACES.split(titre.lower()) if m)
         if cle in vus:
             final[vus[cle]] = None
         vus[cle] = len(final)
         final.append((titre, niveau, p))
-    final = [x for x in final if x][:500]
+    final = [x for x in final if x][:2000]
     if final and min(n for _, n, _ in final) > 1:
         decale = min(n for _, n, _ in final) - 1
         final = [(a, n - decale, p) for a, n, p in final]
@@ -158,16 +227,25 @@ def chapitres_devines(texte):
 
 
 def _chercher(texte, titre, debut, fin):
-    """Position exacte du titre dans texte[debut:fin] (espaces et casse ignores), sinon debut."""
-    mots = [re.escape(m) for m in titre.split()]
+    """Position du titre dans texte[debut:fin] : d'abord une ligne qui est exactement le
+    titre, puis une ligne qui commence par lui (casse exacte, puis sans casse), sinon
+    n'importe ou ; a defaut, debut."""
+    mots = [re.escape(m) for m in _RE_ESPACES.split(titre) if m]
     if not mots:
         return debut
-    m = re.compile(r'\s+'.join(mots), re.I).search(texte, debut, max(debut, fin))
-    return m.start() if m else debut
+    corps = (_E + '+').join(mots)
+    fin = max(debut, fin)
+    ligne = '(?m)^' + _E + '*(' + corps + ')'
+    for motif, options in ((ligne + _E + '*$', 0), (ligne + _E + '*$', re.I), (ligne, 0), (ligne, re.I), ('(' + corps + ')', re.I)):
+        m = re.compile(motif, options).search(texte, debut, fin)
+        if m:
+            return m.start(1)
+    return debut
 
 
 def _sortie(texte, pages, table, source):
     conv = Positions(texte)
+    table = sorted(table, key=lambda x: x[2])   # ordre du texte (la recherche de chapitre en depend)
     return {'pages': [[str(lbl), conv.u16(p)] for lbl, p in pages],
             'table': [[str(t)[:200], int(n), conv.u16(p)] for t, n, p in table],
             'source_table': source}
@@ -190,7 +268,7 @@ def reperes_pdf(reader, pages, texte):
             raise ValueError
     except Exception:
         etiquettes = [str(i + 1) for i in range(len(pages))]
-    table = []
+    table, dernier = [], {}
     def parcourir(elements, niveau):
         for e in elements:
             if isinstance(e, list):
@@ -203,7 +281,12 @@ def reperes_pdf(reader, pages, texte):
                 continue
             if 0 <= n < len(pages) and titre:
                 fin = debuts[n] + len(pages[n])
-                table.append((titre, niveau, _chercher(texte, titre, debuts[n], fin)))
+                depart = dernier.get(n, debuts[n])
+                p = _chercher(texte, titre, depart, fin)
+                if p == depart and depart != debuts[n]:
+                    p = _chercher(texte, titre, debuts[n], fin)
+                dernier[n] = p + 1
+                table.append((titre, niveau, p))
     try:
         parcourir(reader.outline, 1)
     except Exception:
@@ -215,16 +298,39 @@ def reperes_pdf(reader, pages, texte):
 
 
 def reperes_markdown(texte):
-    table, pos = [], 0
+    table, pos, code = [], 0, False
     for ligne in texte.split('\n'):
-        m = re.match(r'^(#{1,6})\s+(.+?)\s*#*\s*$', ligne)
+        if ligne.lstrip().startswith(('```', '~~~')):
+            code = not code
+        m = None if code else re.match(r'^(#{1,6})\s+(.+?)\s*#*\s*$', ligne)
         if m:
             table.append((m.group(2), len(m.group(1)), pos))
         pos += len(ligne) + 1
     return _sortie(texte, [], table, 'titres') if table else reperes_texte(texte)
 
 
-def docx_reperes(root):
+def docx_styles(archive):
+    """styleId -> niveau de titre, d'apres styles.xml (niveau de plan, ou nom « heading N » / « titre N »)."""
+    ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+    niveaux = {}
+    try:
+        racine = ET.fromstring(archive.read('word/styles.xml'))
+    except Exception:
+        return niveaux
+    for st in racine.iter(ns + 'style'):
+        sid = st.get(ns + 'styleId', '')
+        plan = st.find(ns + 'pPr/' + ns + 'outlineLvl')
+        nom = st.find(ns + 'name')
+        if plan is not None and plan.get(ns + 'val', '').isdigit() and int(plan.get(ns + 'val')) < 9:
+            niveaux[sid] = int(plan.get(ns + 'val')) + 1
+        elif nom is not None:
+            m = re.match(r'(?i)^(?:heading|titre)\s*(\d)$', nom.get(ns + 'val', ''))
+            if m:
+                niveaux[sid] = int(m.group(1))
+    return niveaux
+
+
+def docx_reperes(root, styles=None):
     """Texte (comme avant), titres (styles Titre/Heading, niveau de plan) et pages
     (sauts de page et derniers sauts calcules par Word : approximatifs)."""
     ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
@@ -235,18 +341,22 @@ def docx_reperes(root):
         plan = p.find(ns + 'pPr/' + ns + 'outlineLvl')
         niveau = None
         if style is not None:
-            m = re.match(r'(?i)^(?:heading|titre|title)\s*(\d?)$', style.get(ns + 'val', ''))
+            sid = style.get(ns + 'val', '')
+            m = re.match(r'(?i)^(?:heading|titre|title)\s*(\d?)$', sid)
             if m:
                 niveau = int(m.group(1) or 1)
+            elif styles and sid in styles:
+                niveau = styles[sid]
         if niveau is None and plan is not None and plan.get(ns + 'val', '').isdigit() and int(plan.get(ns + 'val')) < 9:
             niveau = int(plan.get(ns + 'val')) + 1
         if p.find(ns + 'pPr/' + ns + 'pageBreakBefore') is not None and debut > 0:
             pages.append(debut)
         s = []
+        taquets = {x for tabs in p.iter(ns + 'tabs') for x in tabs}   # w:tabs/w:tab : taquets, pas du texte
         for n in p.iter():
             if n.tag == ns + 't':
                 s.append(n.text or '')
-            elif n.tag == ns + 'tab':
+            elif n.tag == ns + 'tab' and n not in taquets:
                 s.append('\t')
             elif n.tag == ns + 'br':
                 if n.get(ns + 'type') == 'page':
@@ -307,7 +417,15 @@ def epub_reperes(archive, opf, root, chapitres, textes, texte):
     items = [n for n in root.iter() if n.tag.endswith('}item')]
     def chemin(fichier, href):
         return posixpath.normpath(posixpath.join(posixpath.dirname(fichier), unquote(href.split('#')[0])))
-    table = []
+    table, suivant = [], {}
+    def placer(cible, titre, ancre):
+        d, f = debuts[cible]
+        depart = suivant.get(cible, d) if ancre else d   # une ancre suit le titre precedent du meme chapitre
+        p = _chercher(texte, titre, depart, f)
+        if p == depart and depart != d:
+            p = _chercher(texte, titre, d, f)
+        suivant[cible] = p + 1
+        return p
     nav = next((n for n in items if 'nav' in n.get('properties', '').split()), None)
     ncx = next((n for n in items if n.get('media-type') == 'application/x-dtbncx+xml'), None)
     try:
@@ -316,13 +434,12 @@ def epub_reperes(archive, opf, root, chapitres, textes, texte):
             arbre = ET.fromstring(archive.read(fichier))
             def lire(ol, niveau):
                 for li in [x for x in ol if x.tag.endswith('}li')]:
-                    a = next((x for x in li.iter() if x.tag.endswith('}a')), None)
+                    a = next((x for x in li if x.tag.endswith('}a')), None)   # lien propre a l'entree, pas celui d'une sous-entree
                     if a is not None and a.get('href'):
                         titre = ' '.join(''.join(a.itertext()).split())
                         cible = chemin(fichier, a.get('href'))
                         if titre and cible in debuts:
-                            d, f = debuts[cible]
-                            table.append((titre, niveau, _chercher(texte, titre, d, f)))
+                            table.append((titre, niveau, placer(cible, titre, '#' in a.get('href'))))
                     for sous in [x for x in li if x.tag.endswith('}ol')]:
                         lire(sous, niveau + 1)
             for n in arbre.iter():
@@ -330,6 +447,9 @@ def epub_reperes(archive, opf, root, chapitres, textes, texte):
                     for ol in [x for x in n if x.tag.endswith('}ol')]:
                         lire(ol, 1)
                     break
+    except Exception:
+        table = []
+    try:
         if not table and ncx is not None:
             fichier = posixpath.normpath(posixpath.join(base, unquote(ncx.get('href'))))
             arbre = ET.fromstring(archive.read(fichier))
@@ -340,8 +460,7 @@ def epub_reperes(archive, opf, root, chapitres, textes, texte):
                     if c is not None and titre:
                         cible = chemin(fichier, c.get('src', ''))
                         if cible in debuts:
-                            d, f = debuts[cible]
-                            table.append((titre, niveau, _chercher(texte, titre, d, f)))
+                            table.append((titre, niveau, placer(cible, titre, '#' in c.get('src', ''))))
                     lire_ncx(np, niveau + 1)
             carte = next((x for x in arbre.iter() if x.tag.endswith('}navMap')), None)
             if carte is not None:
@@ -381,7 +500,7 @@ def extract(filename, clean_pdf=False):
                 raise ValueError('Document trop volumineux après décompression (limite 250 Mo).')
             if ext == '.docx':
                 root = ET.fromstring(archive.read('word/document.xml'))
-                text, reperes = docx_reperes(root)
+                text, reperes = docx_reperes(root, docx_styles(archive))
             elif ext == '.odt':
                 root = ET.fromstring(archive.read('content.xml'))
                 text, reperes = odt_reperes(root)
@@ -412,4 +531,5 @@ if __name__ == '__main__':
         result = extract(sys.argv[1], clean_pdf='--clean-pdf' in sys.argv[3:])
     except Exception as error:
         result = {'error': str(error)}
-    Path(sys.argv[2]).write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
+    sortie = sys.argv[3] if sys.argv[1] == '--reperes' else sys.argv[2]
+    Path(sortie).write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')

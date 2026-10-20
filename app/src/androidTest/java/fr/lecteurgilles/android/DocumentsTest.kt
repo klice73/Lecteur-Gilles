@@ -69,6 +69,21 @@ class DocumentsTest {
         assertEquals(listOf("1","2"),r.reperes.pages.map{it.first})
         for(t in r.reperes.table)assertTrue(r.texte.startsWith(t.titre,t.debut))
     }
+    @Test fun docxStylePersonnelEtCodesDeChamp() {
+        // style de titre personnel défini dans styles.xml ; code de champ (instrText) et taquets (w:tabs) hors du texte
+        val w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        val styles="<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:styles xmlns:w=\"$w\"><w:style w:type=\"paragraph\" w:styleId=\"MonTitre\"><w:name w:val=\"Mon titre\"/><w:pPr><w:outlineLvl w:val=\"0\"/></w:pPr></w:style></w:styles>"
+        val doc="<?xml version=\"1.0\" encoding=\"UTF-8\"?><w:document xmlns:w=\"$w\"><w:body>"+
+            "<w:p><w:pPr><w:pStyle w:val=\"MonTitre\"/><w:tabs><w:tab w:val=\"left\" w:pos=\"720\"/></w:tabs></w:pPr><w:r><w:t>Mon grand titre</w:t></w:r></w:p>"+
+            "<w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r><w:r><w:t xml:space=\"preserve\">Texte </w:t></w:r><w:r><w:delText>efface</w:delText></w:r><w:r><w:tab/><w:t>fin.</w:t></w:r></w:p>"+
+            "</w:body></w:document>"
+        val zip=ByteArrayOutputStream().also{b->ZipOutputStream(b).use{z->
+            z.putNextEntry(ZipEntry("word/document.xml"));z.write(doc.toByteArray());z.closeEntry()
+            z.putNextEntry(ZipEntry("word/styles.xml"));z.write(styles.toByteArray());z.closeEntry()}}.toByteArray()
+        val r=Documents.extraire(zip,"application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        assertEquals("Mon grand titre\nTexte \tfin.\n",r.texte)
+        assertEquals(listOf("Mon grand titre" to 1),r.reperes.table.map{it.titre to it.niveau})
+    }
     @Test fun allerAUnChapitreEtLire() {
         val texte="Introduction\nUn court texte pour commencer.\nChapitre 1 Le départ\nGilles lit le premier chapitre.\nChapitre 2 Le retour\nGilles lit maintenant le second chapitre, puis il s'arrête."
         ActivityScenario.launch(MainActivity::class.java).use{s->

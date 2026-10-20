@@ -293,6 +293,7 @@ class MainActivity : Activity() {
         if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
         readingHash=empreinte(fullText);saveText()
+        reperesActuels()   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
         active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         worker.execute {
@@ -377,7 +378,18 @@ class MainActivity : Activity() {
         worker.execute{try{val doc=readDocument(uri);ui{if(id==generation.get()){editor.setText(doc.texte);saveText();setReperes(doc.reperes);controls();status.text="Document prêt."+description()+" Appuyez sur ▶ Lire."}}}catch(e:Exception){ui{if(id==generation.get())status.text="Ouverture impossible : ${e.message}"}}}
     }
     private fun readDocument(uri:Uri):Documents.Resultat{
-        val mime=contentResolver.getType(uri).orEmpty()
+        // le type annoncé par Android est souvent vague (octet-stream, text/plain pour .md) : le nom du fichier le précise
+        val nom=try{contentResolver.query(uri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst()) c.getString(0) else null}}catch(_:Exception){null}.orEmpty().lowercase(java.util.Locale.ROOT)
+        val annonce=contentResolver.getType(uri).orEmpty()
+        val mime=when{
+            nom.endsWith(".md")||nom.endsWith(".markdown")->"text/markdown"
+            nom.endsWith(".pdf")->"application/pdf"
+            nom.endsWith(".docx")->"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            nom.endsWith(".odt")->"application/vnd.oasis.opendocument.text"
+            nom.endsWith(".html")||nom.endsWith(".htm")->"text/html"
+            nom.endsWith(".txt")->"text/plain"
+            else->annonce
+        }
         val bytes=contentResolver.openInputStream(uri)?.use{input->
             val out=java.io.ByteArrayOutputStream();val buf=ByteArray(8192);var total=0
             while(true){val n=input.read(buf);if(n<0)break;total+=n;if(total>30*1024*1024)throw IllegalArgumentException("Fichier supérieur à 30 Mo");out.write(buf,0,n)};out.toByteArray()

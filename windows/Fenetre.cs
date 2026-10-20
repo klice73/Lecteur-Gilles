@@ -160,13 +160,16 @@ class Lecteur : Form {
     /// Reperes du texte affiche : ceux du document importe, sinon chapitres devines par documents.py.
     bool ReperesAJour() {
         if(empreinteReperes!=null && empreinteReperes==EmpreinteActuelle())return true;
+        // reperes d'un autre texte : jamais affiches, meme si documents.py echoue
+        pageEtiquettes=new string[0];pageDebuts=new int[0];tableTitres=new string[0];tableNiveaux=new int[0];tableDebuts=new int[0];sourceTable="";empreinteReperes=null;
         try {
             string entree=Path.Combine(temp,"texte-reperes.txt"),sortie=Path.Combine(temp,"reperes.json");
             File.WriteAllText(entree,texte.Text,new UTF8Encoding(false));if(File.Exists(sortie))File.Delete(sortie);
             var info=new ProcessStartInfo(Path.Combine(racine,"runtime","Scripts","python.exe"),"\""+Path.Combine(racine,"documents.py")+"\" --reperes \""+entree+"\" \""+sortie+"\"") {UseShellExecute=false,CreateNoWindow=true};
             Cursor=Cursors.WaitCursor;
-            using(var p=Process.Start(info)) {if(!p.WaitForExit(60000)) {try{p.Kill();}catch{}return false;}}
+            using(var p=Process.Start(info)) {if(!p.WaitForExit(20000)) {try{p.Kill();}catch{}return false;}}
             var d=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(sortie,Encoding.UTF8));
+            if(d.ContainsKey("error"))return false;
             LireReperes(d);empreinteReperes=EmpreinteActuelle();SauverReperes();return true;
         } catch(Exception) {return false;} finally {Cursor=Cursors.Default;}
     }
@@ -208,7 +211,8 @@ class Lecteur : Form {
     }
     /// Place le curseur a la position et, si demande, lit a partir de la.
     void Naviguer(int position,bool lire) {
-        if(position<0 || position>=texte.TextLength)return;
+        if(position<0 || texte.TextLength==0)return;
+        position=Math.Min(position,texte.TextLength-1);
         if(travail!=null || audioOuvert || lectureProgressive)Arreter();
         texte.Select(position,0);texte.ScrollToCaret();
         if(lire)Demarrer(false,null,position);
@@ -216,6 +220,7 @@ class Lecteur : Form {
     }
     void DialogueAllerA() {
         if(texte.TextLength==0)return;
+        if(importation && travail!=null) {MessageBox.Show("Attendez la fin de l'ouverture du document ou cliquez sur Arrêter.","Aller à");return;}
         if(!ReperesAJour())statut.Text="Les chapitres de ce texte n'ont pas pu être repérés.";
         using(var f=new Form {Text="Aller à…",Size=new Size(640,600),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false,Font=Font}) {
             var grille=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(14),RowCount=5,ColumnCount=1};
@@ -278,7 +283,7 @@ class Lecteur : Form {
             if(texteModifie || empreinteSauvee==null) {
                 string t=texte.Text;string h=Empreinte(t);
                 if(h!=empreinteSauvee) {EcrireSur(Path.Combine(DossierSession,"texte.txt"),t);empreinteSauvee=h;}
-                empreinteTexte=h;texteModifie=false;
+                empreinteTexte=h;longueurEmpreinte=texte.TextLength;texteModifie=false;
             }
             EcrireSur(Path.Combine(DossierSession,"position.txt"),(empreintePosition??"")+"\n"+positionLecture+"\n"+(documentOuvert??""));
             positionModifiee=false;derniereSauvegarde=DateTime.Now;
@@ -291,7 +296,7 @@ class Lecteur : Form {
         try {
             string t=File.ReadAllText(fichierTexte,Encoding.UTF8);
             texte.Text=t;
-            string h=Empreinte(texte.Text);empreinteSauvee=Empreinte(t)==h?h:null;texteModifie=empreinteSauvee==null;empreinteTexte=h;
+            string h=Empreinte(texte.Text);empreinteSauvee=Empreinte(t)==h?h:null;texteModifie=empreinteSauvee==null;empreinteTexte=h;longueurEmpreinte=texte.TextLength;
             if(File.Exists(fichierPosition)) {
                 string[] l=File.ReadAllText(fichierPosition,Encoding.UTF8).Split('\n');
                 int p;
@@ -310,8 +315,10 @@ class Lecteur : Form {
     void NoterPosition(int position) {
         if(position!=positionLecture || empreintePosition!=empreinteLecture) {positionLecture=position;empreintePosition=empreinteLecture;positionModifiee=true;}
     }
+    int longueurEmpreinte=-1;
     string EmpreinteActuelle() {
-        if(empreinteTexte==null) {empreinteTexte=Empreinte(texte.Text);}
+        // la longueur aussi : TextChanged n'arrive pas si la fenetre n'est pas encore affichee
+        if(empreinteTexte==null || texte.TextLength!=longueurEmpreinte) {empreinteTexte=Empreinte(texte.Text);longueurEmpreinte=texte.TextLength;}
         return empreinteTexte;
     }
     bool PositionValide() {
@@ -604,6 +611,7 @@ class Lecteur : Form {
                 f.SauverSession(true);
             }
             using(var g=new Lecteur()) {
+                g.Opacity=0;g.ShowInTaskbar=false;g.Show();Application.DoEvents();
                 if(g.texte.Text!=attendu || g.tableDebuts.Length!=3 || g.pageDebuts.Length!=6)throw new Exception("Reperes non retrouves a la reouverture");
                 g.texte.Text="Introduction\nUn texte colle.\nChapitre 1 Le debut\nIl part.\nChapitre 2 La suite\nIl revient.";
                 if(!g.ReperesAJour())throw new Exception("Chapitres devines : documents.py en echec");

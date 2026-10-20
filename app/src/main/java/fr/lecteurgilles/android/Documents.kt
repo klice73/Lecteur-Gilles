@@ -20,7 +20,7 @@ object Documents {
             mime.contains("wordprocessingml")->xml(bytes,"word/document.xml",false)
             mime.contains("opendocument")->xml(bytes,"content.xml",true)
             mime=="text/html"->texte(android.text.Html.fromHtml(bytes.toString(Charsets.UTF_8),android.text.Html.FROM_HTML_MODE_LEGACY).toString(),false)
-            mime=="text/markdown"->texte(bytes.toString(Charsets.UTF_8),true)
+            mime.contains("markdown")->texte(bytes.toString(Charsets.UTF_8),true)
             mime.startsWith("text/")->texte(bytes.toString(Charsets.UTF_8),false)
             else->throw IllegalArgumentException("Formats : PDF, DOCX, ODT, TXT, MD, HTML")
         }
@@ -35,7 +35,13 @@ object Documents {
         if(markdown){
             val table=ArrayList<Titre>(); var pos=0
             val titre=Regex("^(#{1,6})\\s+(.+?)\\s*#*\\s*$")
-            for(l in t.split('\n')){titre.find(l)?.let{table.add(Titre(it.groupValues[2],it.groupValues[1].length,pos))};pos+=l.length+1}
+            var code=false
+            for(l in t.split('\n')){
+                val d=l.trimStart()
+                if(d.startsWith("```") || d.startsWith("~~~"))code=!code
+                if(!code)titre.find(l)?.let{table.add(Titre(it.groupValues[2],it.groupValues[1].length,pos))}
+                pos+=l.length+1
+            }
             if(table.isNotEmpty())return Resultat(t,Reperes(emptyList(),table,"titres"))
         }
         return Resultat(t,devinee(t))
@@ -67,26 +73,59 @@ object Documents {
         Resultat(texte,if(table.isNotEmpty()) Reperes(liste,table,"signets") else devinee(texte,liste))
     }
 
-    private fun xml(bytes:ByteArray,entree:String,odt:Boolean):Resultat {
-        val xml=ZipInputStream(bytes.inputStream()).use{zip->
-            var res:ByteArray?=null
-            while(true){val e=zip.nextEntry?:break;if(e.name==entree){
+    /** Entrée d'une archive ZIP (DOCX, ODT), 10 Mo au plus ; null si absente. */
+    private fun entree(bytes:ByteArray,nom:String):ByteArray? = ZipInputStream(bytes.inputStream()).use{zip->
+        while(true){
+            val e=zip.nextEntry?:break
+            if(e.name==nom){
                 val b=java.io.ByteArrayOutputStream();val part=ByteArray(8192)
                 while(true){val k=zip.read(part);if(k<0)break;if(b.size()+k>10*1024*1024)throw IllegalArgumentException("Document trop long");b.write(part,0,k)}
-                res=b.toByteArray();break
-            }}
-            res?:throw IllegalArgumentException("Texte du document introuvable")
+                return@use b.toByteArray()
+            }
         }
+        null
+    }
+    private fun lecteur(xml:ByteArray):XmlPullParser {
         val p=android.util.Xml.newPullParser()
         p.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES,true)   // noms sans préfixe : « p » et non « w:p »
         p.setInput(xml.inputStream(),"UTF-8")
-        val w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        return p
+    }
+    private const val W="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    private val styleTitre=Regex("(?i)^(?:heading|titre|title)\\s*(\\d?)$")
+
+    /** styleId -> niveau de titre d'après styles.xml (niveau de plan, ou nom « heading N » / « titre N »),
+     *  comme docx_styles() de windows/documents.py : les styles personnalisés de titre sont reconnus. */
+    private fun stylesDocx(bytes:ByteArray):Map<String,Int> {
+        val niveaux=HashMap<String,Int>()
+        val xml=try{entree(bytes,"word/styles.xml")}catch(_:Exception){null}?:return niveaux
+        try{
+            val p=lecteur(xml); var id:String?=null; var plan:Int?=null; var nom:Int?=null
+            while(p.eventType!=XmlPullParser.END_DOCUMENT){
+                if(p.eventType==XmlPullParser.START_TAG) when(p.name){
+                    "style"->{id=p.getAttributeValue(W,"styleId");plan=null;nom=null}
+                    "outlineLvl"->p.getAttributeValue(W,"val")?.toIntOrNull()?.let{if(it in 0..8)plan=it+1}
+                    "name"->Regex("(?i)^(?:heading|titre)\\s*(\\d)$").find(p.getAttributeValue(W,"val")?:"")?.let{nom=it.groupValues[1].toInt()}
+                }
+                if(p.eventType==XmlPullParser.END_TAG && p.name=="style"){val n=plan?:nom;val s=id;if(s!=null && n!=null)niveaux[s]=n;id=null}
+                p.next()
+            }
+        }catch(_:Exception){}
+        return niveaux
+    }
+
+    private fun xml(bytes:ByteArray,nom:String,odt:Boolean):Resultat {
+        val xml=entree(bytes,nom)?:throw IllegalArgumentException("Texte du document introuvable")
+        val styles=if(odt) emptyMap() else stylesDocx(bytes)
+        val p=lecteur(xml)
         val t="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
         val out=StringBuilder(); val table=ArrayList<Titre>(); val pages=arrayListOf(0)
         var debutPara=0; var niveau=0; var saut=false
+        var dansTabs=false
+        var dansT=false   // DOCX : seul le texte des éléments w:t est du texte (pas les codes de champ, le texte supprimé, les retours de mise en forme)
         while(p.eventType!=XmlPullParser.END_DOCUMENT){
             when(p.eventType){
-                XmlPullParser.TEXT->out.append(p.text)
+                XmlPullParser.TEXT->if(odt || dansT)out.append(p.text)
                 XmlPullParser.START_TAG->when(p.name){
                     "p","h"->{
                         debutPara=out.length;niveau=0
@@ -95,20 +134,30 @@ object Documents {
                             if(p.name=="h")niveau=p.getAttributeValue(t,"outline-level")?.toIntOrNull()?:1
                         }
                     }
-                    "pStyle"->if(!odt)Regex("(?i)^(?:heading|titre|title)\\s*(\\d?)$").find(p.getAttributeValue(w,"val")?:"")?.let{niveau=it.groupValues[1].toIntOrNull()?:1}
-                    "outlineLvl"->if(!odt && niveau==0)p.getAttributeValue(w,"val")?.toIntOrNull()?.let{if(it<9)niveau=it+1}
+                    "t"->if(!odt && p.namespace==W)dansT=true
+                    "pStyle"->if(!odt){
+                        val sid=p.getAttributeValue(W,"val")?:""
+                        val m=styleTitre.find(sid)
+                        if(m!=null)niveau=m.groupValues[1].toIntOrNull()?:1 else styles[sid]?.let{niveau=it}
+                    }
+                    "outlineLvl"->if(!odt && niveau==0)p.getAttributeValue(W,"val")?.toIntOrNull()?.let{if(it in 0..8)niveau=it+1}
                     "pageBreakBefore"->if(!odt && debutPara>0)pages.add(debutPara)
                     "lastRenderedPageBreak"->if(!odt && out.isNotEmpty())pages.add(out.length)
-                    "br"->if(!odt){out.append('\n');if(p.getAttributeValue(w,"type")=="page")pages.add(out.length)}
-                    "tab"->if(!odt)out.append('\t')
+                    "br","cr"->if(!odt){out.append('\n');if(p.getAttributeValue(W,"type")=="page")pages.add(out.length)}
+                    "tabs"->dansTabs=true
+                    "tab"->if(!odt && !dansTabs)out.append('\t')   // w:tabs/w:tab = taquets de tabulation, pas du texte
                     "soft-page-break"->if(odt)saut=true
                 }
-                XmlPullParser.END_TAG->if(p.name in listOf("p","h","tr")){
-                    if(p.name!="tr" && niveau>0){
-                        val s=out.substring(debutPara)
-                        if(s.isNotBlank())table.add(Titre(s.trim(),niveau,debutPara+(s.length-s.trimStart().length)))
+                XmlPullParser.END_TAG->{
+                    if(p.name=="t")dansT=false
+                    if(p.name=="tabs")dansTabs=false
+                    if(p.name in listOf("p","h","tr")){
+                        if(p.name!="tr" && niveau>0){
+                            val s=out.substring(debutPara)
+                            if(s.isNotBlank())table.add(Titre(s.trim(),niveau,debutPara+(s.length-s.trimStart().length)))
+                        }
+                        niveau=0;out.append('\n')
                     }
-                    niveau=0;out.append('\n')
                 }
             }
             p.next()
