@@ -1,3 +1,7 @@
+## Version 1.7 : livres électroniques
+
+Ouverture EPUB/KEPUB et FictionBook sur Android et Windows, conversion optionnelle via calibre sous Windows. Voir [formats et limites](EBOOKS.md).
+
 # Lecteur Gilles — Android et Windows
 
 Application française de lecture vocale locale avec la voix Piper **Gilles** via Sherpa-ONNX.

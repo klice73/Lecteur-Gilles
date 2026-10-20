@@ -16,13 +16,14 @@ object Documents {
 
     fun extraire(bytes:ByteArray,mime:String):Resultat {
         val r=when{
+            mime=="application/x-fictionbook+xml"||mime=="application/x-fictionbook+zip"->FictionBook.read(bytes,mime.endsWith("+zip"))
             mime=="application/pdf"||bytes.take(4).toByteArray().contentEquals("%PDF".toByteArray())->pdf(bytes)
             mime.contains("wordprocessingml")->xml(bytes,"word/document.xml",false)
             mime.contains("opendocument")->xml(bytes,"content.xml",true)
             mime=="text/html"->texte(android.text.Html.fromHtml(bytes.toString(Charsets.UTF_8),android.text.Html.FROM_HTML_MODE_LEGACY).toString(),false)
             mime.contains("markdown")->texte(bytes.toString(Charsets.UTF_8),true)
             mime.startsWith("text/")->texte(bytes.toString(Charsets.UTF_8),false)
-            else->throw IllegalArgumentException("Formats : PDF, DOCX, ODT, TXT, MD, HTML")
+            else->throw IllegalArgumentException("Formats : EPUB, FB2, FB2.ZIP, PDF, DOCX, ODT, TXT, MD, HTML")
         }
         if(r.texte.isBlank())throw IllegalArgumentException("Aucun texte. Un PDF scanné nécessite un OCR.")
         return r

@@ -558,7 +558,14 @@ def extract(filename, clean_pdf=False):
     path = Path(filename)
     ext = path.suffix.lower()
     warning = ''
-    if ext == '.pdf':
+    from ebooks import CONVERTIBLE, convert, fictionbook
+    if ext in CONVERTIBLE:return convert(path)
+    if ext in ('.kfx','.acsm'):
+        raise ValueError('KFX ou bon de téléchargement ACSM : obtenez une édition EPUB/PDF sans protection depuis votre librairie. Ce fichier ne peut pas être lu directement.')
+    if ext == '.kepub':ext='.epub'
+    if ext == '.fb2' or path.name.lower().endswith('.fb2.zip'):
+        text,reperes=fictionbook(path)
+    elif ext == '.pdf':
         from pypdf import PdfReader
         reader = PdfReader(str(path))
         if reader.is_encrypted and not reader.decrypt(''):
@@ -592,7 +599,11 @@ def extract(filename, clean_pdf=False):
                 root = ET.fromstring(archive.read(opf))
                 items = {n.attrib['id']: n.attrib['href'] for n in root.iter() if n.tag.endswith('}item')}
                 from urllib.parse import unquote
-                chapters = [posixpath.normpath(posixpath.join(posixpath.dirname(opf), unquote(items[n.attrib['idref']].split('#')[0]))) for n in root.iter() if n.tag.endswith('}itemref')]
+                chapters = [posixpath.normpath(posixpath.join(posixpath.dirname(opf), unquote(items[n.attrib['idref']].split('#')[0]))) for n in root.iter() if n.tag.endswith('}itemref') and n.get('linear') != 'no']
+                if 'META-INF/encryption.xml' in archive.namelist():
+                    enc=ET.fromstring(archive.read('META-INF/encryption.xml'))
+                    protected={posixpath.normpath(unquote(n.get('URI',''))) for n in enc.iter() if n.tag.endswith('}CipherReference')}
+                    if any(c in protected for c in chapters):raise ValueError('Le texte de cet EPUB est protégé. Utilisez une édition sans protection.')
                 textes = [html(archive.read(chapter)) for chapter in chapters]
                 text = '\n\n'.join(textes)
                 reperes = epub_reperes(archive, opf, root, chapters, textes, text)

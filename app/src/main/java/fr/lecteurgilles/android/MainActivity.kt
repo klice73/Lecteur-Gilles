@@ -387,7 +387,7 @@ class MainActivity : Activity() {
         }
     }
     private fun openDocument(){
-        val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="*/*";putExtra(Intent.EXTRA_MIME_TYPES,arrayOf("application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.oasis.opendocument.text","text/plain","text/html","text/markdown"))}
+        val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="*/*"}
         startActivityForResult(intent,10)
     }
     @Deprecated("Android legacy activity result compatible with API 26")
@@ -401,7 +401,22 @@ class MainActivity : Activity() {
         // le type annoncé par Android est souvent vague (octet-stream, text/plain pour .md) : le nom du fichier le précise
         val nom=try{contentResolver.query(uri,arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst()) c.getString(0) else null}}catch(_:Exception){null}.orEmpty().lowercase(java.util.Locale.ROOT)
         val annonce=contentResolver.getType(uri).orEmpty()
+        if(listOf(".mobi",".azw",".azw3",".azw4",".prc",".lit",".lrf",".pdb",".rtf",".djvu",".htmlz",".txtz",".kfx").any{nom.endsWith(it)})
+            throw IllegalArgumentException("Convertissez ce livre sans protection en EPUB sur Windows avec calibre, puis ouvrez cet EPUB ici. KFX peut nécessiter un export EPUB depuis votre librairie.")
+        if(nom.endsWith(".acsm"))throw IllegalArgumentException("Ce fichier est un bon de téléchargement Adobe, pas le livre. Téléchargez une édition EPUB ou PDF lisible sans protection.")
+        if(nom.endsWith(".epub") || nom.endsWith(".kepub") || annonce=="application/epub+zip"){
+            val file=java.io.File.createTempFile("livre-",".epub",cacheDir)
+            try{
+                contentResolver.openInputStream(uri)?.use{input->file.outputStream().use{out->
+                    val buf=ByteArray(8192);var total=0L
+                    while(true){val n=input.read(buf);if(n<0)break;total+=n;require(total<=100L*1024*1024){"Livre supérieur à 100 Mo"};out.write(buf,0,n)}
+                }}?:throw IllegalArgumentException("Fichier inaccessible")
+                return Documents.texte(EpubReader.read(file),false)
+            }finally{file.delete()}
+        }
         val mime=when{
+            nom.endsWith(".fb2.zip")->"application/x-fictionbook+zip"
+            nom.endsWith(".fb2")->"application/x-fictionbook+xml"
             nom.endsWith(".md")||nom.endsWith(".markdown")->"text/markdown"
             nom.endsWith(".pdf")->"application/pdf"
             nom.endsWith(".docx")->"application/vnd.openxmlformats-officedocument.wordprocessingml.document"

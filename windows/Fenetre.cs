@@ -73,7 +73,7 @@ class Lecteur : Form {
     int passage;
     string dossierLecture, audioCourant;
     string documentOuvert;
-    const string Formats = "Documents lisibles|*.pdf;*.docx;*.odt;*.epub;*.txt;*.md;*.html;*.htm;*.csv|PDF|*.pdf|Word|*.docx|Livres EPUB|*.epub|OpenDocument|*.odt|Texte|*.txt;*.md;*.csv|Pages HTML|*.html;*.htm";
+    const string Formats = "Documents lisibles|*.pdf;*.docx;*.odt;*.epub;*.kepub;*.fb2;*.fb2.zip;*.mobi;*.azw;*.azw3;*.azw4;*.prc;*.pdb;*.lit;*.lrf;*.rtf;*.djvu;*.htmlz;*.txtz;*.tcr;*.snb;*.rb;*.pml;*.chm;*.txt;*.md;*.html;*.htm;*.csv|PDF|*.pdf|Word|*.docx|Livres EPUB et FictionBook|*.epub;*.kepub;*.fb2;*.fb2.zip|OpenDocument|*.odt|Texte|*.txt;*.md;*.csv|Pages HTML|*.html;*.htm";
     public Lecteur() {
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Text = "Piper — Lecture naturelle"; Size = new Size(940,700); MinimumSize = new Size(740,500);
@@ -107,7 +107,7 @@ class Lecteur : Form {
         Ajouter(actions,"Enregistrer en WAV",delegate { Demarrer(true); });
         Ajouter(actions,"À propos et licences",delegate { AfficherLicences(); });
         var aide=new ToolTip();aide.SetToolTip(lireCurseur,"Cliquez dans le texte. Si du texte est sélectionné, la lecture commence au début de la sélection et continue jusqu’à la fin du document.");
-        statut.Dock=DockStyle.Fill; statut.Text="Ouvrez ou glissez un PDF, DOCX, EPUB, ODT, HTML ou fichier texte."; grille.Controls.Add(statut,0,4);
+        statut.Dock=DockStyle.Fill; statut.Text="Ouvrez ou glissez un EPUB, FB2, PDF, DOCX, ODT, HTML ou fichier texte."; grille.Controls.Add(statut,0,4);
         texte.MaxLength=int.MaxValue;
         texte.TextChanged+=delegate {
             if(changeSurlignage)return;
