@@ -170,6 +170,14 @@ jobs:
           $q=Start-Process -FilePath windows\Piper-Gilles.exe -ArgumentList "--test-reperes","$PWD\windows\doc-livre.json" -Wait -PassThru
           Get-Content windows\verification-reperes.txt
           if($q.ExitCode -ne 0){throw "test Aller a en echec"}
+      - name: Rapports des tests Windows lisibles en cas d'échec
+        if: failure()
+        shell: pwsh
+        run: |
+          foreach($f in "windows\verification-minutage.txt","windows\verification-reperes.txt"){
+            if(Test-Path $f){ $c=(Get-Content $f -Raw) -replace '%','%25' -replace "`r",'' -replace "`n",'%0A'; Write-Output "::error title=$f::$($c.Substring(0,[Math]::Min(1800,$c.Length)))" }
+            else { Write-Output "::error title=$f::absent" }
+          }
       - name: Paquet de mise à jour Windows
         shell: pwsh
         env:
