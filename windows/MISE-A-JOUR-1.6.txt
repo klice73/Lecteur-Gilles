@@ -1,6 +1,20 @@
-LECTEUR GILLES 1.5 POUR WINDOWS : MISE A JOUR
+LECTEUR GILLES 1.6 POUR WINDOWS : MISE A JOUR
 
-Nouveautes
+Nouveautes de la 1.6
+  - Bouton « ☰ Aller a… » : table des matieres du livre (double-clic sur un titre)
+    et saut a une page precise. La page imprimee est reconnue quand le PDF la donne
+    (« iv », « 12 ») ; sinon on peut taper le rang de la page (1 a N).
+  - Sources de la table : signets du PDF, table d'un EPUB, titres d'un document Word
+    ou OpenDocument, titres Markdown. Sans table, les titres sont reperes d'apres le
+    texte (« Chapitre 3 », « Premiere partie », « Introduction »...).
+  - Pendant la lecture, la ligne d'etat indique la page et le chapitre en cours.
+  - Les documents Word et OpenDocument n'ont pas de pages fixes : celles indiquees
+    viennent des sauts de page enregistres par Word ou LibreOffice (approximatives).
+    Les EPUB et les textes colles n'ont pas de pages : on y va par pourcentage.
+  - Pour profiter des pages et des chapitres d'un livre deja ouvert, rouvrez-le une fois
+    avec « Ouvrir un document ».
+
+Nouveautes de la 1.5
   - Surlignage mot a mot : la phrase lue est en jaune clair, le mot prononce en jaune fonce.
   - Le texte et la position de lecture sont conserves a la fermeture du lecteur,
     pendant une pause, a l'arret, et toutes les 2 secondes environ pendant la lecture
@@ -12,11 +26,12 @@ Nouveautes
 Installation (environ 1 minute)
   1. Fermer le lecteur Gilles.
   2. Ouvrir le dossier ou se trouve Piper-Gilles.exe (sur D:).
-     Par prudence, copier Piper-Gilles.exe, lecteur.py et voix\fr_FR-gilles-low.onnx
-     dans un dossier « ancienne-version ».
+     Par prudence, copier Piper-Gilles.exe, lecteur.py, documents.py et
+     voix\fr_FR-gilles-low.onnx dans un dossier « ancienne-version ».
   3. Copier le contenu de ce paquet dans ce dossier, en acceptant de remplacer :
        Piper-Gilles.exe
        lecteur.py
+       documents.py
        voix\fr_FR-gilles-low.onnx
        voix\fr_FR-gilles-low.onnx.json
   4. Relancer le lecteur avec le raccourci du bureau (inchange).
@@ -33,5 +48,5 @@ Limites connues
     plutot qu'exacte : le mot surligne peut alors avoir un mot d'avance ou de retard.
   - Ne pas relancer prepare_voices.py : il remettrait la voix d'origine (bredouillement).
 
-Verification faite avant publication : voir verification-minutage.txt (test sur une
+Verifications faites avant publication : voir verification-minutage.txt et verification-reperes.txt (test sur une
 machine Windows de GitHub, sans carte son : la lecture audio reelle n'y est pas testee).

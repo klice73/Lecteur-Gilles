@@ -1,4 +1,4 @@
-Lecteur Gilles 1.5 — licences, attributions et sources
+Lecteur Gilles 1.6 — licences, attributions et sources
 
 Code du lecteur : GPL-3.0-or-later, sans garantie. Sources : https://github.com/klice73/Lecteur-Gilles . Les sources et notices peuvent être consultées, modifiées et redistribuées sous leurs licences respectives. Les archives identifiées sont accompagnées de leurs empreintes SHA-256.
 

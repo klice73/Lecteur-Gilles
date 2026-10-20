@@ -25,6 +25,10 @@ class Lecteur : Form {
     string empreinteSauvee, empreintePosition, empreinteTexte, empreinteLecture;
     DateTime derniereSauvegarde=DateTime.MinValue, dernierControle=DateTime.MinValue;
     Button reprendre;
+    // Version 1.6 : reperes du document (pages et table des matieres), valables pour le texte d'empreinte empreinteReperes.
+    string[] pageEtiquettes=new string[0]; int[] pageDebuts=new int[0];
+    string[] tableTitres=new string[0]; int[] tableNiveaux=new int[0], tableDebuts=new int[0];
+    string empreinteReperes, sourceTable="";
     Label statut = new Label();
     ComboBox vitesse = new ComboBox();
     Process travail;
@@ -85,6 +89,7 @@ class Lecteur : Form {
         var outils=new FlowLayoutPanel {Dock=DockStyle.Fill}; grille.Controls.Add(outils,0,1);
         Ajouter(outils,"Coller le texte",delegate { Arreter(); if(Clipboard.ContainsText()) texte.Text=Clipboard.GetText(); });
         Ajouter(outils,"Ouvrir un document",delegate { using(var d=new OpenFileDialog {Filter=Formats}) if(d.ShowDialog()==DialogResult.OK) Importer(d.FileName); });
+        Ajouter(outils,"☰ Aller à…",delegate { DialogueAllerA(); });
         outils.Controls.Add(new Label { Text="Vitesse", AutoSize=true, Margin=new Padding(16,12,4,0) });
         vitesse.DropDownStyle=ComboBoxStyle.DropDownList; vitesse.Width=75;
         vitesse.Items.AddRange(new object[]{"0.75","0.9","1.0","1.1","1.25","1.5"}); vitesse.SelectedIndex=2; outils.Controls.Add(vitesse);
@@ -118,6 +123,140 @@ class Lecteur : Form {
         FormClosing+=delegate { Arreter(); SauverSession(true); timer.Stop(); try {Directory.Delete(temp,true);} catch {} };
         ChargerSession();
         Shown+=delegate { if(PositionValide()) {texte.Select(positionLecture,0);texte.ScrollToCaret();} };
+    }
+    // ---- Reperes : pages et table des matieres (version 1.6) ----
+    static string[] Chaines(object v,int k) {var l=v as System.Collections.ArrayList;if(l==null)return new string[0];var r=new string[l.Count];for(int i=0;i<l.Count;i++)r[i]=Convert.ToString(((System.Collections.ArrayList)l[i])[k]);return r;}
+    static int[] Entiers(object v,int k) {var l=v as System.Collections.ArrayList;if(l==null)return new int[0];var r=new int[l.Count];for(int i=0;i<l.Count;i++)r[i]=Convert.ToInt32(((System.Collections.ArrayList)l[i])[k]);return r;}
+    /// Applique un resultat de documents.py (texte + reperes) a la fenetre.
+    void AppliquerDocument(Dictionary<string,object> data) {
+        texte.Text=((string)data["text"]).Replace("\r\n","\n").Replace("\n","\r\n");
+        LireReperes(data);
+        empreinteReperes=EmpreinteActuelle();
+        SauverReperes();
+    }
+    void LireReperes(Dictionary<string,object> d) {
+        object v;
+        pageEtiquettes=d.TryGetValue("pages",out v)?Chaines(v,0):new string[0];pageDebuts=d.TryGetValue("pages",out v)?Entiers(v,1):new int[0];
+        tableTitres=d.TryGetValue("table",out v)?Chaines(v,0):new string[0];tableNiveaux=d.TryGetValue("table",out v)?Entiers(v,1):new int[0];tableDebuts=d.TryGetValue("table",out v)?Entiers(v,2):new int[0];
+        sourceTable=d.TryGetValue("source_table",out v)?Convert.ToString(v):"";
+    }
+    void SauverReperes() {
+        try {
+            Directory.CreateDirectory(DossierSession);
+            var pages=new List<object>();for(int i=0;i<pageDebuts.Length;i++)pages.Add(new object[]{pageEtiquettes[i],pageDebuts[i]});
+            var table=new List<object>();for(int i=0;i<tableDebuts.Length;i++)table.Add(new object[]{tableTitres[i],tableNiveaux[i],tableDebuts[i]});
+            var d=new Dictionary<string,object>();d["empreinte"]=empreinteReperes;d["pages"]=pages;d["table"]=table;d["source_table"]=sourceTable;
+            EcrireSur(Path.Combine(DossierSession,"reperes.json"),new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Serialize(d));
+        } catch(Exception) {}
+    }
+    void ChargerReperes() {
+        try {
+            string f=Path.Combine(DossierSession,"reperes.json");if(!File.Exists(f))return;
+            var d=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(f,Encoding.UTF8));
+            if(Convert.ToString(d["empreinte"])!=EmpreinteActuelle())return;
+            LireReperes(d);empreinteReperes=EmpreinteActuelle();
+        } catch(Exception) {}
+    }
+    /// Reperes du texte affiche : ceux du document importe, sinon chapitres devines par documents.py.
+    bool ReperesAJour() {
+        if(empreinteReperes!=null && empreinteReperes==EmpreinteActuelle())return true;
+        try {
+            string entree=Path.Combine(temp,"texte-reperes.txt"),sortie=Path.Combine(temp,"reperes.json");
+            File.WriteAllText(entree,texte.Text,new UTF8Encoding(false));if(File.Exists(sortie))File.Delete(sortie);
+            var info=new ProcessStartInfo(Path.Combine(racine,"runtime","Scripts","python.exe"),"\""+Path.Combine(racine,"documents.py")+"\" --reperes \""+entree+"\" \""+sortie+"\"") {UseShellExecute=false,CreateNoWindow=true};
+            Cursor=Cursors.WaitCursor;
+            using(var p=Process.Start(info)) {if(!p.WaitForExit(60000)) {try{p.Kill();}catch{}return false;}}
+            var d=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(sortie,Encoding.UTF8));
+            LireReperes(d);empreinteReperes=EmpreinteActuelle();SauverReperes();return true;
+        } catch(Exception) {return false;} finally {Cursor=Cursors.Default;}
+    }
+    string DescriptionReperes() {
+        string s="";
+        if(pageDebuts.Length>0)s+=" "+pageDebuts.Length+" pages";
+        if(tableDebuts.Length>0)s+=(s.Length>0?",":"")+" "+tableDebuts.Length+" titres dans la table"+(sourceTable=="devinee"?" (repérés d'après les titres)":"");
+        return s.Length>0?s+" ; « ☰ Aller à… » pour naviguer.":"";
+    }
+    static int Dernier(int[] debuts,int position) {
+        int bas=0,haut=debuts.Length-1,res=-1;
+        while(bas<=haut) {int m=(bas+haut)/2;if(debuts[m]<=position){res=m;bas=m+1;}else haut=m-1;}
+        return res;
+    }
+    /// « page 12 sur 300 · Chapitre 2 », ou « 45 % · Chapitre 2 » sans pages.
+    string OuSuisJe(int position) {
+        if(empreinteReperes==null || empreinteReperes!=EmpreinteActuelle())return "";
+        string s="";
+        int p=Dernier(pageDebuts,position);
+        if(p>=0)s="page "+pageEtiquettes[p]+" ("+(p+1)+" sur "+pageDebuts.Length+")";
+        else if(texte.TextLength>0)s=(int)(100L*position/texte.TextLength)+" % du texte";
+        int c=Dernier(tableDebuts,position);
+        if(c>=0)s+=" · "+tableTitres[c];
+        return s;
+    }
+    /// Debut d'une page : etiquette imprimee (« iv », « 12 ») d'abord, sinon rang de la page. -1 si inconnue.
+    int DebutPage(string demande) {
+        demande=(demande??"").Trim();
+        for(int i=0;i<pageEtiquettes.Length;i++)if(string.Equals(pageEtiquettes[i],demande,StringComparison.OrdinalIgnoreCase))return pageDebuts[i];
+        int n;if(int.TryParse(demande,out n) && n>=1 && n<=pageDebuts.Length)return pageDebuts[n-1];
+        return -1;
+    }
+    /// Position pour un pourcentage du texte, ramenee au debut de la phrase.
+    int DebutPourcentage(double pourcent) {
+        int pos=(int)Math.Max(0,Math.Min(texte.TextLength-1,texte.TextLength*pourcent/100.0));
+        string s=texte.Text;int limite=Math.Max(0,pos-400);
+        for(int i=pos;i>limite;i--) if(s[i-1]=='\n' || (i>=2 && ".!?".IndexOf(s[i-2])>=0 && s[i-1]==' '))return i;
+        return pos;
+    }
+    /// Place le curseur a la position et, si demande, lit a partir de la.
+    void Naviguer(int position,bool lire) {
+        if(position<0 || position>=texte.TextLength)return;
+        if(travail!=null || audioOuvert || lectureProgressive)Arreter();
+        texte.Select(position,0);texte.ScrollToCaret();
+        if(lire)Demarrer(false,null,position);
+        else {string ou=OuSuisJe(position);statut.Text="Placé"+(ou.Length>0?" : "+ou:"")+". Cliquez sur ▶ Lire à partir du curseur.";}
+    }
+    void DialogueAllerA() {
+        if(texte.TextLength==0)return;
+        if(!ReperesAJour())statut.Text="Les chapitres de ce texte n'ont pas pu être repérés.";
+        using(var f=new Form {Text="Aller à…",Size=new Size(640,600),StartPosition=FormStartPosition.CenterParent,MinimizeBox=false,MaximizeBox=false,Font=Font}) {
+            var grille=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(14),RowCount=5,ColumnCount=1};
+            grille.RowStyles.Add(new RowStyle(SizeType.AutoSize));grille.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+            grille.RowStyles.Add(new RowStyle(SizeType.AutoSize));grille.RowStyles.Add(new RowStyle(SizeType.AutoSize));grille.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            f.Controls.Add(grille);
+            string titre=tableDebuts.Length>0?"Table des matières"+(sourceTable=="devinee"?" (repérée d'après les titres du texte)":"")+" : double-cliquez sur un titre":"Aucun titre trouvé dans ce texte.";
+            grille.Controls.Add(new Label {Text=titre,AutoSize=true},0,0);
+            var liste=new ListBox {Dock=DockStyle.Fill,IntegralHeight=false};
+            for(int i=0;i<tableDebuts.Length;i++) {
+                int p=Dernier(pageDebuts,tableDebuts[i]);
+                liste.Items.Add(new string(' ',4*Math.Max(0,tableNiveaux[i]-1))+tableTitres[i]+(p>=0?"   (p. "+pageEtiquettes[p]+")":""));
+            }
+            int ici=Dernier(tableDebuts,texte.SelectionStart);if(ici>=0)liste.SelectedIndex=ici;
+            grille.Controls.Add(liste,0,1);
+            var ligne=new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Fill};
+            bool pages=pageDebuts.Length>0;
+            ligne.Controls.Add(new Label {Text=pages?"Page (« "+pageEtiquettes[0]+" » à « "+pageEtiquettes[pageEtiquettes.Length-1]+" », ou rang 1 à "+pageDebuts.Length+") :":"Position dans le texte (0 à 100 %) :",AutoSize=true,Margin=new Padding(0,8,6,0)});
+            var champ=new TextBox {Width=90};ligne.Controls.Add(champ);
+            var allerPage=new Button {Text=pages?"Aller à la page":"Aller à ce %",AutoSize=true};ligne.Controls.Add(allerPage);
+            grille.Controls.Add(ligne,0,2);
+            var lire=new CheckBox {Text="Commencer la lecture à cet endroit",Checked=true,AutoSize=true};grille.Controls.Add(lire,0,3);
+            var bas=new FlowLayoutPanel {AutoSize=true,Dock=DockStyle.Fill,FlowDirection=FlowDirection.RightToLeft};
+            var fermer=new Button {Text="Fermer",AutoSize=true,DialogResult=DialogResult.Cancel};bas.Controls.Add(fermer);
+            var allerTitre=new Button {Text="Aller au titre choisi",AutoSize=true,Enabled=tableDebuts.Length>0};bas.Controls.Add(allerTitre);
+            grille.Controls.Add(bas,0,4);f.CancelButton=fermer;
+            int choix=-1;
+            Action titreChoisi=delegate { if(liste.SelectedIndex>=0){choix=tableDebuts[liste.SelectedIndex];f.DialogResult=DialogResult.OK;} };
+            liste.DoubleClick+=delegate {titreChoisi();};allerTitre.Click+=delegate {titreChoisi();};
+            liste.KeyDown+=delegate(object s,KeyEventArgs e) {if(e.KeyCode==Keys.Enter){titreChoisi();e.Handled=true;}};
+            Action pageChoisie=delegate {
+                int pos=-1;
+                if(pages) pos=DebutPage(champ.Text);
+                else {double v;if(double.TryParse(champ.Text.Replace(',','.').Replace("%",""),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out v) && v>=0 && v<=100)pos=DebutPourcentage(v);}
+                if(pos<0) {MessageBox.Show(pages?"Page introuvable. Exemples : « "+pageEtiquettes[0]+" », « "+pageEtiquettes[pageEtiquettes.Length/2]+" ».":"Entrez un nombre de 0 à 100.","Aller à");return;}
+                choix=pos;f.DialogResult=DialogResult.OK;
+            };
+            allerPage.Click+=delegate {pageChoisie();};
+            champ.KeyDown+=delegate(object s,KeyEventArgs e) {if(e.KeyCode==Keys.Enter){pageChoisie();e.Handled=true;e.SuppressKeyPress=true;}};
+            if(f.ShowDialog(this)==DialogResult.OK && choix>=0)Naviguer(choix,lire.Checked);
+        }
     }
     // ---- Session : texte et position de lecture (version 1.5) ----
     string DossierSession { get { return Path.Combine(racine,"session"); } }
@@ -159,6 +298,7 @@ class Lecteur : Form {
                 if(l.Length>=2 && l[0].Length>0 && int.TryParse(l[1],out p) && p>=0) {positionLecture=p;empreintePosition=l[0];}
                 if(l.Length>=3 && l[2].Trim().Length>0) {documentOuvert=l[2].Trim();Text="Piper — "+Path.GetFileName(documentOuvert);}
             }
+            ChargerReperes();
             statut.Text=PositionValide()?"Texte et position de lecture retrouvés. Cliquez sur ⟲ Reprendre où j'étais.":"Texte précédent retrouvé.";
         } catch(Exception) {} finally {chargement=false;}
     }
@@ -238,8 +378,10 @@ class Lecteur : Form {
         int md=debutLecture+passageDebut+minuteMots[m][2],ml=minuteMots[m][3]-minuteMots[m][2];
         int pd=md,pl=ml;
         if(p>=0) {pd=debutLecture+passageDebut+minutePhrases[p][2];pl=minutePhrases[p][3]-minutePhrases[p][2];}
+        bool nouvellePhrase=pd!=phraseDebut;
         Surligner(pd,pl,md,ml);
         NoterPosition(pd);
+        if(nouvellePhrase) {string ou=OuSuisJe(pd);if(ou.Length>0)statut.Text="Lecture : "+ou+".";}
     }
     void Arreter() {
         if(IsDisposed || texte.IsDisposed)return;
@@ -324,12 +466,13 @@ class Lecteur : Form {
         if(importation) {
             importation=false;
             try {
-                var data=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,string>>(File.ReadAllText(Path.Combine(temp,"document.json")));
-                if(data.ContainsKey("error")) {statut.Text="Document non importé. Votre texte précédent est conservé.";MessageBox.Show(data["error"],"Ouverture du document");return;}
-                texte.Text=data["text"].Replace("\r\n","\n").Replace("\n","\r\n");
+                var data=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(temp,"document.json")));
+                if(data.ContainsKey("error")) {statut.Text="Document non importé. Votre texte précédent est conservé.";MessageBox.Show((string)data["error"],"Ouverture du document");return;}
+                AppliquerDocument(data);
                 Text="Piper — "+Path.GetFileName(documentOuvert);
-                statut.Text="Document prêt : "+data["name"]+". Cliquez sur Lire.";
-                if(!string.IsNullOrEmpty(data["warning"])) {statut.Text=data["warning"];MessageBox.Show(data["warning"],"Document importé partiellement");}
+                statut.Text="Document prêt : "+data["name"]+"."+DescriptionReperes()+" Cliquez sur Lire.";
+                string avert=data.ContainsKey("warning")?(string)data["warning"]:"";
+                if(!string.IsNullOrEmpty(avert)) {statut.Text=avert;MessageBox.Show(avert,"Document importé partiellement");}
             }catch(Exception error){statut.Text="Erreur d'ouverture.";MessageBox.Show(error.Message,"Document");}
             return;
         }
@@ -364,7 +507,8 @@ class Lecteur : Form {
                 LireAudio(prochain);
                 if(minuteMots.Length>0)SuivreTemps(0);
                 else {Surligner(debutLecture+passageDebut,passageFin-passageDebut);NoterPosition(debutLecture+passageDebut);}
-                statut.Text="Lecture du passage "+passage+". Le reste du livre se prépare progressivement.";
+                string ou=OuSuisJe(debutLecture+passageDebut);
+                statut.Text=ou.Length>0?"Lecture : "+ou+".":"Lecture du passage "+passage+". Le reste du livre se prépare progressivement.";
             } else if(travail==null && File.Exists(Path.Combine(dossierLecture,"done"))) {
                 lectureProgressive=false;Surligner(-1,0);minuteMots=null;minutePhrases=null;texte.ReadOnly=false;vitesse.Enabled=true;voix.Enabled=true;statut.Text="Lecture terminée.";
                 NoterPosition(-1);SauverSession(true);
@@ -435,9 +579,48 @@ class Lecteur : Form {
             try {if(deplace || !existait) {if(Directory.Exists(session))Directory.Delete(session,true);if(deplace)Directory.Move(copie,session);}} catch {}
         }
     }
+    /// Test sans carte son des reperes : document.json produit par documents.py sur tests/livre.pdf.
+    static int TesterReperes(string json) {
+        string racine=AppDomain.CurrentDomain.BaseDirectory,session=Path.Combine(racine,"session"),copie=session+"-avant-test";
+        string rapport=Path.Combine(racine,"verification-reperes.txt");
+        bool existait=true,deplace=false;
+        try {
+            if(Directory.Exists(copie))throw new Exception("Un dossier "+copie+" existe deja (test precedent interrompu) : le remettre a la place de « session ». Rien n'a ete modifie.");
+            existait=Directory.Exists(session);
+            if(existait) {Directory.Move(session,copie);deplace=true;}
+            var data=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(json,Encoding.UTF8));
+            string attendu;
+            using(var f=new Lecteur()) {
+                f.Opacity=0;f.ShowInTaskbar=false;f.Show();Application.DoEvents();
+                f.AppliquerDocument(data);attendu=f.texte.Text;
+                if(f.pageDebuts.Length!=6 || f.tableDebuts.Length!=3)throw new Exception("Reperes lus : "+f.pageDebuts.Length+" pages, "+f.tableDebuts.Length+" titres");
+                if(f.DebutPage("ii")!=f.pageDebuts[1] || f.DebutPage("3")!=f.pageDebuts[4] || f.DebutPage("6")!=f.pageDebuts[5] || f.DebutPage("9")!=-1)throw new Exception("Recherche de page");
+                for(int i=0;i<3;i++) {string a=f.texte.Text.Substring(f.tableDebuts[i],f.tableTitres[i].Length);if(a!=f.tableTitres[i])throw new Exception("Titre mal place : "+a);}
+                string ou=f.OuSuisJe(f.tableDebuts[2]+5);
+                if(!ou.Contains("page 3") || !ou.Contains("Chapitre 2"))throw new Exception("Page en cours : "+ou);
+                f.Naviguer(f.tableDebuts[1],false);
+                if(f.texte.SelectionStart!=f.tableDebuts[1] || f.travail!=null)throw new Exception("Navigation sans lecture");
+                if(f.DebutPourcentage(50)<0)throw new Exception("Pourcentage");
+                f.SauverSession(true);
+            }
+            using(var g=new Lecteur()) {
+                if(g.texte.Text!=attendu || g.tableDebuts.Length!=3 || g.pageDebuts.Length!=6)throw new Exception("Reperes non retrouves a la reouverture");
+                g.texte.Text="Introduction\nUn texte colle.\nChapitre 1 Le debut\nIl part.\nChapitre 2 La suite\nIl revient.";
+                if(!g.ReperesAJour())throw new Exception("Chapitres devines : documents.py en echec");
+                if(g.tableDebuts.Length!=3 || g.tableTitres[2]!="Chapitre 2 La suite" || g.pageDebuts.Length!=0)throw new Exception("Chapitres devines : "+string.Join(" | ",g.tableTitres));
+                if(g.texte.Text.Substring(g.tableDebuts[2],19)!="Chapitre 2 La suite")throw new Exception("Position du chapitre devine");
+            }
+            File.WriteAllText(rapport,"Reussi : reperes du PDF d'exemple (6 pages avec etiquettes i, ii, 1 a 4 ; 3 signets sur 2 niveaux), recherche de page par etiquette et par rang, titres bien places, page en cours, navigation, pourcentage, reperes retrouves a la reouverture, chapitres devines pour un texte colle. "+DateTime.Now.ToString("s"));
+            return 0;
+        } catch(Exception e) {File.WriteAllText(rapport,"ECHEC : "+e);return 1;}
+        finally {
+            try {if(deplace || !existait) {if(Directory.Exists(session))Directory.Delete(session,true);if(deplace)Directory.Move(copie,session);}} catch {}
+        }
+    }
     [STAThread] static void Main(string[] args) {
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
         if(args.Length>0 && args[0]=="--test-minutage") {Environment.ExitCode=TesterMinutage(args.Length>1?args[1]:null);return;}
+        if(args.Length>1 && args[0]=="--test-reperes") {Environment.ExitCode=TesterReperes(args[1]);return;}
         if(args.Length>0 && args[0]=="--test-cursor") {
             using(var f=new Lecteur()) {
                 try {

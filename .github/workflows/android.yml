@@ -116,7 +116,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.5 : surlignage mot à mot, texte et position de lecture conservés à la fermeture, voix Gilles sans bredouillement. Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.5.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.5.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.6 : « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.6.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.6.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -151,6 +151,13 @@ jobs:
           $j=Get-Content windows\flux\part-000001.json -Raw | ConvertFrom-Json
           "mots: $($j.mots.Count)  phrases: $($j.phrases.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
           if($j.mots.Count -lt 20 -or $j.exactes -lt 1){throw "minutage incomplet"}
+      - name: Repères des documents (pages, table des matières)
+        shell: pwsh
+        run: |
+          windows\runtime\Scripts\python.exe windows\tests\test_reperes.py
+          if($LASTEXITCODE -ne 0){throw "test des reperes en echec"}
+          windows\runtime\Scripts\python.exe windows\documents.py windows\tests\livre.pdf windows\doc-livre.json
+          if($LASTEXITCODE -ne 0){throw "documents.py en echec"}
       - name: Compiler Piper-Gilles.exe (C#, .NET Framework)
         shell: pwsh
         run: windows\build.ps1
@@ -160,13 +167,16 @@ jobs:
           $p=Start-Process -FilePath windows\Piper-Gilles.exe -ArgumentList "--test-minutage","$PWD\windows\flux\part-000001.json" -Wait -PassThru
           Get-Content windows\verification-minutage.txt
           if($p.ExitCode -ne 0){throw "test Windows en echec"}
+          $q=Start-Process -FilePath windows\Piper-Gilles.exe -ArgumentList "--test-reperes","$PWD\windows\doc-livre.json" -Wait -PassThru
+          Get-Content windows\verification-reperes.txt
+          if($q.ExitCode -ne 0){throw "test Aller a en echec"}
       - name: Paquet de mise à jour Windows
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
-          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\MISE-A-JOUR-1.5.txt,windows\verification-minutage.txt paquet\
+          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\MISE-A-JOUR-1.6.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
           Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json paquet\voix\
-          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.5.zip
-          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.5.zip
+          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.6.zip
+          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.6.zip

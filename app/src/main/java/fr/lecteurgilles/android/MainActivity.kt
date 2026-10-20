@@ -17,12 +17,9 @@ import android.view.WindowManager
 import android.widget.*
 import com.k2fsa.sherpa.onnx.*
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
-import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.zip.ZipInputStream
 
 class MainActivity : Activity() {
     /** Version 1.5 : un élément par mot (avec sa phrase), dans l'ordre de l'audio. */
@@ -66,6 +63,7 @@ class MainActivity : Activity() {
                 phraseHighlightStart=s.phraseStart
             }
             notePosition(if(s.phraseStart>=0) s.phraseStart else s.start)
+            ouSuisJe(s.phraseStart)?.let{status.text="Lecture : $it."}
         }
         highlight?.let{editor.text.removeSpan(it)}
         highlight=BackgroundColorSpan(0xffffd54f.toInt()).also{editor.text.setSpan(it,s.start,s.end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)}
@@ -101,6 +99,84 @@ class MainActivity : Activity() {
         val p=savedPosition()
         if(p<0){status.text="Aucune position de lecture enregistrée pour ce texte.";return}
         editor.setSelection(p);startReading(true)
+    }
+    // ---- Version 1.6 : pages et table des matières (« Aller à… ») ----
+    private var reperes:Reperes?=null
+    private var reperesHash=""
+    private val reperesFile by lazy { File(filesDir,"reperes.json") }
+    private fun setReperes(r:Reperes){
+        reperes=r;reperesHash=empreinte(editor.text)
+        try{
+            val o=org.json.JSONObject().put("empreinte",reperesHash).put("source",r.source)
+            o.put("pages",org.json.JSONArray().apply{r.pages.forEach{put(org.json.JSONArray().put(it.first).put(it.second))}})
+            o.put("table",org.json.JSONArray().apply{r.table.forEach{put(org.json.JSONArray().put(it.titre).put(it.niveau).put(it.debut))}})
+            reperesFile.writeText(o.toString())
+        }catch(_:Exception){}
+    }
+    private fun loadReperes(){
+        try{
+            if(!reperesFile.exists())return
+            val o=org.json.JSONObject(reperesFile.readText())
+            if(o.getString("empreinte")!=empreinte(editor.text))return
+            val p=o.getJSONArray("pages");val t=o.getJSONArray("table")
+            reperes=Reperes((0 until p.length()).map{p.getJSONArray(it).let{a->a.getString(0) to a.getInt(1)}},
+                (0 until t.length()).map{t.getJSONArray(it).let{a->Titre(a.getString(0),a.getInt(1),a.getInt(2))}},o.optString("source"))
+            reperesHash=o.getString("empreinte")
+        }catch(_:Exception){}
+    }
+    /** Repères du texte affiché : ceux du document ouvert, sinon chapitres devinés d'après les titres. */
+    private fun reperesActuels():Reperes{
+        val h=empreinte(editor.text)
+        reperes?.let{if(reperesHash==h)return it}
+        val r=Reperes(emptyList(),Reperes.chapitresDevines(editor.text.toString()),"devinee")
+        setReperes(r);return r
+    }
+    private fun ouSuisJe(position:Int):String?{
+        val r=reperes?:return null
+        if(position<0 || reperesHash!=readingHash)return null
+        return r.ouSuisJe(position,editor.text.length).ifEmpty{null}
+    }
+    private fun description():String{
+        val r=reperes?:return ""
+        var s=""
+        if(r.pages.isNotEmpty())s+=" ${r.pages.size} pages"
+        if(r.table.isNotEmpty())s+=(if(s.isEmpty()) "" else ",")+" ${r.table.size} titres"+(if(r.source=="devinee") " (repérés d'après le texte)" else "")
+        return if(s.isEmpty()) "" else "$s ; « ☰ Aller à… » pour naviguer."
+    }
+    /** Place le curseur à la position et lit à partir de là. */
+    private fun allerA(position:Int){
+        if(position<0 || position>=editor.text.length)return
+        if(active)stopReading()
+        editor.setSelection(position)
+        editor.layout?.let{l->editor.scrollTo(0,maxOf(0,l.getLineTop(l.getLineForOffset(position))-dp(8)))}
+        startReading(true)
+    }
+    private fun debutPourcentage(pourcent:Double):Int{
+        val s=editor.text; var pos=(s.length*pourcent/100.0).toInt().coerceIn(0,maxOf(0,s.length-1))
+        val limite=maxOf(0,pos-400)
+        for(i in pos downTo limite+1) if(s[i-1]=='\n' || (i>=2 && s[i-2] in ".!?" && s[i-1]==' ')) return i
+        return pos
+    }
+    private fun allerA(){
+        if(editor.text.isEmpty())return
+        val r=reperesActuels()
+        val ici=r.titre(editor.selectionStart)
+        val entrees=ArrayList<String>()
+        entrees.add(if(r.pages.isNotEmpty()) "📄 Aller à une page… (« ${r.pages.first().first} » à « ${r.pages.last().first} »)" else "📍 Aller à une position du texte (%)…")
+        for((i,x) in r.table.withIndex()){
+            val p=r.page(x.debut)
+            entrees.add("   ".repeat(maxOf(0,x.niveau-1))+(if(i==ici) "▸ " else "")+x.titre+(if(p>=0) "  (p. ${r.pages[p].first})" else ""))
+        }
+        val titre=if(r.table.isEmpty()) "Aller à… (aucun titre trouvé)" else if(r.source=="devinee") "Table des matières (repérée d'après le texte)" else "Table des matières"
+        AlertDialog.Builder(this).setTitle(titre).setItems(entrees.toTypedArray()){_,k->
+            if(k>0){allerA(r.table[k-1].debut);return@setItems}
+            val champ=EditText(this).apply{inputType=if(r.pages.isNotEmpty()) InputType.TYPE_CLASS_TEXT else InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL;hint=if(r.pages.isNotEmpty()) "ex. ${r.pages[r.pages.size/2].first}" else "0 à 100"}
+            AlertDialog.Builder(this).setTitle(if(r.pages.isNotEmpty()) "Page (étiquette imprimée ou rang 1 à ${r.pages.size})" else "Position dans le texte (%)")
+                .setView(champ).setPositiveButton("Aller et lire"){_,_->
+                    val pos=if(r.pages.isNotEmpty()) r.debutPage(champ.text.toString()) else champ.text.toString().replace(',','.').toDoubleOrNull()?.takeIf{it in 0.0..100.0}?.let{debutPourcentage(it)}?:-1
+                    if(pos<0)status.text="Page introuvable." else allerA(pos)
+                }.setNegativeButton("Annuler",null).show()
+        }.setNegativeButton("Fermer",null).show()
     }
     private val noisy=object:android.content.BroadcastReceiver(){
         // écouteurs ou casque Bluetooth débranchés : pause (et position enregistrée)
@@ -142,6 +218,7 @@ class MainActivity : Activity() {
             val clip = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
             clip.primaryClip?.getItemAt(0)?.coerceToText(this)?.let { stopReading(); editor.setText(it); saveText(); controls() }
         }, LinearLayout.LayoutParams(0,dp(56),0.5f))
+        tools.addView(button("☰ Aller à…") { allerA() }, LinearLayout.LayoutParams(0,dp(56),0.7f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
         layout.addView(speed)
@@ -171,6 +248,7 @@ class MainActivity : Activity() {
         setContentView(layout)
         highlightHandler.post(highlightTick)
         registerReceiver(noisy,android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+        loadReperes()
         val p=savedPosition()
         if(p>=0){editor.setSelection(p);status.text="Position de lecture retrouvée. Touchez ⟲ Reprendre où j'étais."}
         controls()
@@ -242,7 +320,7 @@ class MainActivity : Activity() {
                     try {
                         for((index,part) in parts.withIndex()){
                             if(!continuer())break
-                            ui{if(id==generation.get()&&!paused)status.text="Lecture : passage ${index+1} / ${parts.size}"}
+                            ui{if(id==generation.get()&&!paused&&reperesHash!=readingHash)status.text="Lecture : passage ${index+1} / ${parts.size}"}
                             for(r in Minutage.phrases(part.text)){
                                 if(!continuer())break
                                 val phrase=part.text.substring(r.first,r.last+1)
@@ -296,40 +374,15 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode,resultCode,data)
         if(requestCode!=10||resultCode!=RESULT_OK)return
         val uri=data?.data?:return;stopReading();val id=generation.incrementAndGet();status.text="Ouverture du document…"
-        worker.execute{try{val text=readDocument(uri);ui{if(id==generation.get()){editor.setText(text);saveText();controls();status.text="Document prêt. Appuyez sur ▶ Lire."}}}catch(e:Exception){ui{if(id==generation.get())status.text="Ouverture impossible : ${e.message}"}}}
+        worker.execute{try{val doc=readDocument(uri);ui{if(id==generation.get()){editor.setText(doc.texte);saveText();setReperes(doc.reperes);controls();status.text="Document prêt."+description()+" Appuyez sur ▶ Lire."}}}catch(e:Exception){ui{if(id==generation.get())status.text="Ouverture impossible : ${e.message}"}}}
     }
-    private fun readDocument(uri:Uri):String{
+    private fun readDocument(uri:Uri):Documents.Resultat{
         val mime=contentResolver.getType(uri).orEmpty()
         val bytes=contentResolver.openInputStream(uri)?.use{input->
             val out=java.io.ByteArrayOutputStream();val buf=ByteArray(8192);var total=0
             while(true){val n=input.read(buf);if(n<0)break;total+=n;if(total>30*1024*1024)throw IllegalArgumentException("Fichier supérieur à 30 Mo");out.write(buf,0,n)};out.toByteArray()
         }?:throw IllegalArgumentException("Fichier inaccessible")
-        val text=when{
-            mime=="application/pdf"||bytes.take(4).toByteArray().contentEquals("%PDF".toByteArray())->PDDocument.load(bytes).use{PDFTextStripper().getText(it)}
-            mime.contains("wordprocessingml")||mime.contains("opendocument")-> {
-                val wanted=if(mime.contains("opendocument"))"content.xml" else "word/document.xml"
-                ZipInputStream(bytes.inputStream()).use{zip->
-                    var result:String?=null
-                    while(true){val entry=zip.nextEntry?:break;if(entry.name==wanted){
-                        val xmlBuffer=java.io.ByteArrayOutputStream();val xmlPart=ByteArray(8192)
-                        while(true){val n=zip.read(xmlPart);if(n<0)break;if(xmlBuffer.size()+n>10*1024*1024)throw IllegalArgumentException("Document trop long");xmlBuffer.write(xmlPart,0,n)}
-                        val xml=xmlBuffer.toByteArray()
-                        val parser=android.util.Xml.newPullParser();parser.setInput(xml.inputStream(),"UTF-8")
-                        val out=StringBuilder()
-                        while(parser.eventType!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT){
-                            if(parser.eventType==org.xmlpull.v1.XmlPullParser.TEXT)out.append(parser.text)
-                            if(parser.eventType==org.xmlpull.v1.XmlPullParser.END_TAG && parser.name in listOf("p","h","tr"))out.append('\n')
-                            parser.next()
-                        };result=out.toString();break
-                    }};result?:throw IllegalArgumentException("Texte du document introuvable")
-                }
-            }
-            mime=="text/html"->android.text.Html.fromHtml(bytes.toString(Charsets.UTF_8),android.text.Html.FROM_HTML_MODE_LEGACY).toString()
-            mime.startsWith("text/")->bytes.toString(Charsets.UTF_8)
-            else->throw IllegalArgumentException("Formats : PDF, DOCX, ODT, TXT, HTML")
-        }
-        if(text.isBlank())throw IllegalArgumentException("Aucun texte. Un PDF scanné nécessite un OCR.")
-        return text
+        return Documents.extraire(bytes,mime)
     }
     override fun onSaveInstanceState(out:Bundle){if(!active)saveText();super.onSaveInstanceState(out)} // texte dans le fichier privé, pas dans le Bundle (limite ~1 Mo)
     override fun onStop(){pauseReading();savePosition();if(!active)saveText();super.onStop()}
