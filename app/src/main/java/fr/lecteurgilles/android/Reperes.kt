@@ -69,6 +69,8 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
             "TREIZE","QUATORZE","QUINZE","SEIZE","DIX-SEPT","DIX-HUIT","DIX-NEUF","VINGT")
         private val nombreSeul=Regex("(?d)^(?:[–—-]$E*)?([0-9]{1,3})(?:$E*[–—-])?$")
         private val suiteLong=Regex("(?d)^(?:$|$E*[:.–—-](?:$|$E)|$E+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|$E|[.:)–—,-])|$E+(?iu:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)$E*(?:$|[.:–—-]))")
+        private const val FIN_PHRASE=".!?»…\"”):;"
+        private const val MINUSCULES="abcdefghijklmnopqrstuvwxyzàâäçéèêëîïôöùûüÿœæ"
         private data class Trouve(val titre:String,val niveau:Int,val debut:Int,val ligne:Int)
         /** Titres reconnus dans un texte sans table (« Chapitre 3 », « Première partie », « III » ou « 3 » seuls…).
          *  pages : débuts des pages quand on les connaît (numéros de page écartés). */
@@ -92,6 +94,7 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
             val seuls=linkedMapOf("nombre" to ArrayList<Int>(),"seul" to ArrayList<Int>(),"mot" to ArrayList<Int>())   // vérifiés après coup
             var res=ArrayList<Trouve>()
             val majeur=hashMapOf("arabe" to 0,"romain" to 0,"seul" to 0,"nombre" to 0,"mot" to 0)
+            var relance=HashSet<String>()   // sortes de numéros autorisées à repartir à 1 (après un titre de partie)
             var pos=0
             for((k,ligne) in lignes.withIndex()){
                 val debut=pos; pos+=ligne.length+1
@@ -106,6 +109,7 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                 val mot=m?.groupValues?.get(1)?.lowercase(java.util.Locale.ROOT)?:""
                 if(titreNu.find(s)!=null){
                     res.add(Trouve(s,if(mot in NIVEAU_UN) 1 else 2,ici,k))
+                    if(mot in NIVEAU_UN)relance=HashSet(majeur.keys)
                 }else if(m!=null){
                     if(suiteTable)continue
                     if(mot in LONGS){
@@ -114,11 +118,12 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                     }
                     else if(longueur(s)>60 || (s.last() in ".!?" && nm>2))continue
                     res.add(Trouve(s,if(mot in NIVEAU_UN) 1 else 2,ici,k))
+                    if(mot in NIVEAU_UN)relance=HashSet(majeur.keys)
                 }else{
                     val r=romainSeul.find(s); val c=nombreSeul.find(s)
                     if(r!=null || c!=null || s in NOMBRES_MOTS){
                         val (sorte,v)=if(r!=null) "seul" to romain(r.groupValues[1]) else if(c!=null) "nombre" to c.groupValues[1].toInt() else "mot" to NOMBRES_MOTS.indexOf(s)+1
-                        if(v==majeur.getValue(sorte)+1 || v==1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k));seuls.getValue(sorte).add(k)}   // suite, ou numérotation qui repart
+                        if(v==majeur.getValue(sorte)+1 || (v==1 && sorte in relance)){majeur[sorte]=v;relance.remove(sorte);res.add(Trouve(s,2,ici,k));seuls.getValue(sorte).add(k)}   // suite, ou numérotation qui repart après une partie
                         continue
                     }
                     val n=num[k]
@@ -131,22 +136,26 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                     }
                     val sorte=if(nb[0].isDigit()) "arabe" else "romain"
                     val v=if(sorte=="arabe") nb.toInt() else romain(nb)
-                    if(v==majeur.getValue(sorte)+1 || v==1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
+                    if(v==majeur.getValue(sorte)+1 || (v==1 && sorte in relance)){majeur[sorte]=v;relance.remove(sorte);res.add(Trouve(s,2,ici,k))}
                 }
             }
             // Numéros seuls (« 3 », « III », « TROIS ») écartés en bloc s'ils ressemblent à autre chose qu'à des chapitres :
             // un seul ; moins de 3 lignes entre deux (recette, liste) ; un sur deux pages ou plus ; écarts très réguliers.
             val ecartes=HashSet<Int>()
+            val titresLignes=res.map{it.ligne}.toHashSet()
+            fun coupe(k:Int):Boolean{
+                val av=voisin(k,-1); val ap=voisin(k,1)
+                return (av!=null && av !in titresLignes && nets[av].last() !in FIN_PHRASE) || (ap!=null && nets[ap][0] in MINUSCULES)
+            }
             for((sorte,ks) in seuls){
                 if(ks.isEmpty())continue
                 val ecarts=ks.zipWithNext{a,b->rang[b]-rang[a]}.sorted()
                 // chiffres et nombres en lettres : moins de 3 lignes entre deux = étapes d'une liste (pas les chiffres romains seuls)
                 var mauvais=ks.size<2 || (sorte!="seul" && ecarts[ecarts.size/2]<3)
-                if(pages!=null && pages.isNotEmpty() && ks.size>=5 && 2*ks.size>=pages.size)mauvais=true
-                if(ecarts.size>=7){
-                    val moy=ecarts.sum().toDouble()/ecarts.size
-                    if(Math.sqrt(ecarts.sumOf{(it-moy)*(it-moy)}/ecarts.size)<0.25*moy)mauvais=true
-                }
+                if(pages!=null && pages.isNotEmpty() && ks.size>=5 && 5*ks.size>=4*pages.size)mauvais=true   // sur presque chaque page
+                // numéro de page d'un texte collé : il coupe une phrase ; un numéro de chapitre suit une fin de chapitre
+                val coupures=ks.count{coupe(it)}
+                if(ks.size>=3 && 10*coupures>=3*ks.size)mauvais=true
                 if(mauvais)ecartes.addAll(ks)
             }
             res=ArrayList(res.filter{it.ligne !in ecartes})

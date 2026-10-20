@@ -150,6 +150,17 @@ _RE_NOMBRE_SEUL = re.compile('^(?:[–—-]' + _E + '*)?([0-9]{1,3})(?:' + _E + 
 _RE_SUITE_LONG = re.compile('^(?:$|' + _E + '*[:.–—-](?:$|' + _E + ')|' + _E + r'+(?:[0-9]{1,4}|[IVXLC]{1,7}|[A-Z])(?=$|' + _E + '|[.:)–—,-])|' + _E + r'+(?i:premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)' + _E + '*(?:$|[.:–—-]))')
 
 
+_FIN_PHRASE = '.!?»…"”):;'
+_MINUSCULES = 'abcdefghijklmnopqrstuvwxyzàâäçéèêëîïôöùûüÿœæ'
+
+
+def _coupe(k, nets, voisin, titres):
+    """La ligne k coupe-t-elle une phrase ? (ligne d'avant sans ponctuation finale et qui n'est pas un titre,
+    ou ligne d'apres qui commence par une minuscule)"""
+    av, ap = voisin(k, -1), voisin(k, 1)
+    return (av is not None and av not in titres and nets[av][-1] not in _FIN_PHRASE) or (ap is not None and nets[ap][0] in _MINUSCULES)
+
+
 def chapitres_devines(texte, pages=None):
     """Titres reconnus dans un texte sans table : « Chapitre 3 », « Premiere partie »,
     « Introduction », « II. La methode », « III » ou « 3 » seuls... Lignes courtes seulement.
@@ -174,6 +185,7 @@ def chapitres_devines(texte, pages=None):
     seuls = {'nombre': [], 'seul': [], 'mot': []}   # numeros seuls acceptes, verifies apres coup
     res, pos = [], 0   # (titre, niveau, position, ligne)
     majeur = {'arabe': 0, 'romain': 0, 'seul': 0, 'nombre': 0, 'mot': 0}
+    relance = set()   # sortes de numeros autorisees a repartir a 1 (apres un titre de partie)
     for k, ligne in enumerate(lignes):
         debut = pos
         pos += len(ligne) + 1
@@ -190,6 +202,8 @@ def chapitres_devines(texte, pages=None):
         mot = m.group(1).lower() if m else ''
         if _RE_TITRE_NU.match(s):
             res.append((s, 1 if mot in _NIVEAU_UN else 2, ici, k))
+            if mot in _NIVEAU_UN:
+                relance = set(majeur)
         elif m:
             if suite_table:
                 continue
@@ -200,13 +214,16 @@ def chapitres_devines(texte, pages=None):
             elif len(s) > 60 or (s[-1] in '.!?' and mots > 2):
                 continue
             res.append((s, 1 if mot in _NIVEAU_UN else 2, ici, k))
+            if mot in _NIVEAU_UN:
+                relance = set(majeur)
         else:
             r = _RE_ROMAIN_SEUL.match(s)
             c = _RE_NOMBRE_SEUL.match(s)
             if r or c or s in _NOMBRES_MOTS:
                 sorte, v = ('seul', _romain(r.group(1))) if r else ('nombre', int(c.group(1))) if c else ('mot', _NOMBRES_MOTS.index(s) + 1)
-                if v == majeur[sorte] + 1 or v == 1:   # suite, ou numerotation qui repart (nouvelle partie)
+                if v == majeur[sorte] + 1 or (v == 1 and sorte in relance):   # suite, ou numerotation qui repart apres une partie
                     majeur[sorte] = v
+                    relance.discard(sorte)
                     res.append((s, 2, ici, k))
                     seuls[sorte].append(k)
                 continue
@@ -222,25 +239,28 @@ def chapitres_devines(texte, pages=None):
                 continue
             sorte = 'arabe' if num[0].isdigit() else 'romain'
             v = int(num) if sorte == 'arabe' else _romain(num)
-            if v == majeur[sorte] + 1 or v == 1:
+            if v == majeur[sorte] + 1 or (v == 1 and sorte in relance):
                 majeur[sorte] = v
+                relance.discard(sorte)
                 res.append((s, 2, ici, k))
     # Numeros seuls (« 3 », « III », « TROIS ») : ecartes en bloc s'ils ressemblent a autre chose qu'a des chapitres :
     # un seul ; moins de 3 lignes entre deux (etapes d'une recette, liste) ; un sur deux pages ou plus d'un PDF,
     # ou ecarts tres reguliers (numeros de page d'un texte colle).
     ecartes = set()
+    titres = {x[3] for x in res}
     for sorte, ks in seuls.items():
         if not ks:
             continue
         ecarts = sorted(rang[b] - rang[a] for a, b in zip(ks, ks[1:]))
         # chiffres et nombres en lettres : moins de 3 lignes entre deux = etapes d'une liste (pas les chiffres romains seuls)
         mauvais = len(ks) < 2 or (sorte != 'seul' and ecarts[len(ecarts) // 2] < 3)
-        if pages and len(ks) >= 5 and 2 * len(ks) >= len(pages):
+        if pages and len(ks) >= 5 and 5 * len(ks) >= 4 * len(pages):   # sur presque chaque page : numeros de page
             mauvais = True
-        if len(ecarts) >= 7:
-            moy = sum(ecarts) / len(ecarts)
-            if (sum((e - moy) ** 2 for e in ecarts) / len(ecarts)) ** 0.5 < 0.25 * moy:
-                mauvais = True
+        # numero de page d'un texte colle : il coupe une phrase (ligne d'avant sans ponctuation finale,
+        # ou ligne d'apres qui commence par une minuscule) ; un numero de chapitre suit une fin de chapitre
+        coupures = sum(1 for k in ks if _coupe(k, nets, voisin, titres))
+        if len(ks) >= 3 and 10 * coupures >= 3 * len(ks):
+            mauvais = True
         if mauvais:
             ecartes.update(ks)
     res = [x for x in res if x[3] not in ecartes]
