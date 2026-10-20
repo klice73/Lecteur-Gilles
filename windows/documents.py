@@ -142,12 +142,21 @@ def _dans_liste(k, numero, profondeur, av, ap):
     return False
 
 
-def chapitres_devines(texte):
+_NOMBRES_MOTS = ('UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF', 'DIX', 'ONZE', 'DOUZE',
+                 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF', 'VINGT')
+# chiffre seul sur sa ligne, eventuellement entre tirets : « 3 », « – 3 – »
+_RE_NOMBRE_SEUL = re.compile('^(?:[–—-]' + _E + '*)?([0-9]{1,3})(?:' + _E + '*[–—-])?$')
+# apres « Chapitre », « Partie »... : un numero, un nombre en lettres, une ponctuation, ou rien
+_RE_SUITE_LONG = re.compile('(?i)^(?:$|' + _E + '*[:.–—-](?:$|' + _E + ')|' + _E + r'+(?:[0-9]{1,4}|[ivxlc]{1,7}|[a-z]|premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)(?=$|' + _E + '|[.:)–—,-]))')
+
+
+def chapitres_devines(texte, pages=None):
     """Titres reconnus dans un texte sans table : « Chapitre 3 », « Premiere partie »,
-    « Introduction », « II. La methode », « III » seul... Lignes courtes seulement.
+    « Introduction », « II. La methode », « III » ou « 3 » seuls... Lignes courtes seulement.
     Ecartes : entrees d'une table imprimee (pointilles, ou suite de lignes finissant
     par un numero de page), listes (lignes numerotees de meme niveau qui se suivent),
-    phrases. Meme regle dans Reperes.kt. -> [(titre, niveau, position)]"""
+    phrases ; numeros seuls en haut ou en bas d'une page (pages = debuts des pages, PDF).
+    Meme regle dans Reperes.kt. -> [(titre, niveau, position)]"""
     lignes = texte.split('\n')
     nets = [_nettoyer(l) for l in lignes]
     numero = [_RE_NUMERO.match(s) for s in nets]
@@ -158,13 +167,27 @@ def chapitres_devines(texte):
             j += pas
         return j if 0 <= j < len(nets) else None
     fin_nombre = [bool(_RE_FIN_NOMBRE.search(s)) for s in nets]
-    res, pos = [], 0
-    majeur = {'arabe': 0, 'romain': 0, 'seul': 0}
+    # lignes en bord de page (premiere ou derniere ligne non vide) : numeros de page probables
+    bord = set()
+    if pages:
+        import bisect
+        debuts_lignes, pos = [], 0
+        for l in lignes:
+            debuts_lignes.append(pos)
+            pos += len(l) + 1
+        page_de = [bisect.bisect_right(pages, d) for d in debuts_lignes]
+        for k in range(len(lignes)):
+            if nets[k]:
+                av, ap = voisin(k, -1), voisin(k, 1)
+                if av is None or page_de[av] != page_de[k] or ap is None or page_de[ap] != page_de[k]:
+                    bord.add(k)
+    res, pos = [], 0   # (titre, niveau, position, ligne)
+    majeur = {'arabe': 0, 'romain': 0, 'seul': 0, 'nombre': 0, 'mot': 0}
     for k, ligne in enumerate(lignes):
         debut = pos
         pos += len(ligne) + 1
         s = nets[k]
-        if not (2 <= len(s) <= 90) and not _RE_ROMAIN_SEUL.match(s):
+        if not (2 <= len(s) <= 90) and not _RE_ROMAIN_SEUL.match(s) and not _RE_NOMBRE_SEUL.match(s):
             continue
         if not s or s[-1] in ',;' or _RE_POINTILLES.search(s):
             continue
@@ -172,54 +195,87 @@ def chapitres_devines(texte):
         suite_table = fin_nombre[k] and ((av is not None and fin_nombre[av]) or (ap is not None and fin_nombre[ap]))
         ici = debut + (len(ligne) - len(ligne.lstrip(_ESP + '\r')))
         mots = _mots(s)
-        if _RE_TITRE_NU.match(s):
-            m = _RE_MOT_TITRE.match(s) or _RE_ORDINAL.match(s)
-            mot = m.group(1).lower() if m else ''
-            res.append((s, 1 if mot in _NIVEAU_UN else 2, ici))
-            continue
         m = _RE_MOT_TITRE.match(s) or _RE_ORDINAL.match(s)
-        if m:
-            mot = m.group(1).lower()
+        mot = m.group(1).lower() if m else ''
+        if _RE_TITRE_NU.match(s):
+            res.append((s, 1 if mot in _NIVEAU_UN else 2, ici, k))
+        elif m:
             if suite_table:
                 continue
             if mot in _LONGS:
-                if s.endswith('.') and mots > 6:
+                # « Partie depuis trois jours. », « Livre-moi ça. » : pas des titres
+                if not _RE_SUITE_LONG.match(s[m.end(1):]) or (s.endswith('.') and mots > 6):
                     continue
             elif len(s) > 60 or (s[-1] in '.!?' and mots > 2):
                 continue
-            res.append((s, 1 if mot in _NIVEAU_UN else 2, ici))
+            res.append((s, 1 if mot in _NIVEAU_UN else 2, ici, k))
+        else:
+            r = _RE_ROMAIN_SEUL.match(s)
+            c = _RE_NOMBRE_SEUL.match(s)
+            if r or c or s in _NOMBRES_MOTS:
+                if k in bord:
+                    continue
+                sorte, v = ('seul', _romain(r.group(1))) if r else ('nombre', int(c.group(1))) if c else ('mot', _NOMBRES_MOTS.index(s) + 1)
+                if v == majeur[sorte] + 1:
+                    majeur[sorte] = v
+                    res.append((s, 2, ici, k))
+                continue
+            n = numero[k]
+            if not n or mots > 12 or s[-1] in '.:' or suite_table:
+                continue
+            if _dans_liste(k, numero, profondeur, av, ap):
+                continue   # liste : lignes numerotees qui se suivent (1, 2, 3...) au meme niveau
+            num = n.group(1)
+            if '.' in num:
+                if majeur['arabe'] and int(num.split('.')[0]) == majeur['arabe']:
+                    res.append((s, 3, ici, k))
+                continue
+            sorte = 'arabe' if num[0].isdigit() else 'romain'
+            v = int(num) if sorte == 'arabe' else _romain(num)
+            if v == majeur[sorte] + 1:
+                majeur[sorte] = v
+                res.append((s, 2, ici, k))
             continue
-        r = _RE_ROMAIN_SEUL.match(s)
-        if r:
-            v = _romain(r.group(1))
-            if v == majeur['seul'] + 1:
-                majeur['seul'] = v
-                res.append((s, 2, ici))
+        if res[-1][1] == 1:
+            for x in majeur:   # nouvelle partie : la numerotation des chapitres repart
+                majeur[x] = 0
+    # numeros seuls trop rapproches (moins de 1500 caracteres en moyenne) : numeros de page, pas des chapitres
+    seuls = [x for x in res if _RE_NOMBRE_SEUL.match(x[0])]
+    if len(seuls) >= 10 and (seuls[-1][2] - seuls[0][2]) / (len(seuls) - 1) < 1500:
+        res = [x for x in res if not _RE_NOMBRE_SEUL.match(x[0])]
+    # Doublons. 1) meme titre repete sans autre titre entre (en-tete courant) : garder le premier.
+    # 2) table imprimee (au moins 3 titres sur des lignes qui se suivent, ou suite d'un « Sommaire ») :
+    #    retirer ses entrees qui reapparaissent plus loin dans le livre.
+    def cle(titre):
+        return ' '.join(m for m in _RE_ESPACES.split(titre.lower()) if m)
+    def cle_table(titre):   # « Chapitre 1 La neige 7 » (entree de table) = « Chapitre 1 La neige »
+        c = cle(titre)
+        return _RE_FIN_NOMBRE.sub('', c) if c.count(' ') >= 2 else c
+    garde = []
+    for x in res:
+        if garde and cle(garde[-1][0]) == cle(x[0]):
             continue
-        n = numero[k]
-        if not n or mots > 12 or s[-1] in '.:' or suite_table:
+        garde.append(x)
+    blocs, bloc = [], []
+    for x in garde:
+        if bloc and voisin(bloc[-1][3], 1) == x[3]:
+            bloc.append(x)
+        else:
+            if bloc:
+                blocs.append(bloc)
+            bloc = [x]
+    if bloc:
+        blocs.append(bloc)
+    retires = set()
+    for b in blocs:
+        sommaire = (_RE_MOT_TITRE.match(b[0][0]) or _RE_ORDINAL.match(b[0][0]))
+        sommaire = sommaire and sommaire.group(1).lower() in ('sommaire', 'table des matières')
+        if len(b) < 3 and not (sommaire and len(b) >= 2):
             continue
-        if _dans_liste(k, numero, profondeur, av, ap):
-            continue   # liste : lignes numerotees qui se suivent (1, 2, 3...) au meme niveau
-        num = n.group(1)
-        if '.' in num:
-            if majeur['arabe'] and int(num.split('.')[0]) == majeur['arabe']:
-                res.append((s, 3, ici))
-            continue
-        sorte = 'arabe' if num[0].isdigit() else 'romain'
-        v = int(num) if sorte == 'arabe' else _romain(num)
-        if v == majeur[sorte] + 1:
-            majeur[sorte] = v
-            res.append((s, 2, ici))
-    # meme titre deux fois (table imprimee puis corps du livre) : garder le dernier
-    vus, final = {}, []
-    for titre, niveau, p in res:
-        cle = ' '.join(m for m in _RE_ESPACES.split(titre.lower()) if m)
-        if cle in vus:
-            final[vus[cle]] = None
-        vus[cle] = len(final)
-        final.append((titre, niveau, p))
-    final = [x for x in final if x][:2000]
+        for x in b[1:] if sommaire else b:
+            if any(cle_table(y[0]) == cle_table(x[0]) and y[3] > x[3] for y in garde):
+                retires.add(x[3])
+    final = [(a, n, p) for a, n, p, k in garde if k not in retires][:2000]
     if final and min(n for _, n, _ in final) > 1:
         decale = min(n for _, n, _ in final) - 1
         final = [(a, n - decale, p) for a, n, p in final]
@@ -293,16 +349,23 @@ def reperes_pdf(reader, pages, texte):
         table = []
     source = 'signets'
     if not table:
-        table, source = chapitres_devines(texte), 'devinee'
+        table, source = chapitres_devines(texte, debuts), 'devinee'
     return _sortie(texte, list(zip(etiquettes, debuts)), table, source)
 
 
+_RE_CLOTURE = re.compile(r'^(`{3,}|~{3,})')
+
+
 def reperes_markdown(texte):
-    table, pos, code = [], 0, False
+    table, pos, code = [], 0, ''
     for ligne in texte.split('\n'):
-        if ligne.lstrip().startswith(('```', '~~~')):
-            code = not code
-        m = None if code else re.match(r'^(#{1,6})\s+(.+?)\s*#*\s*$', ligne)
+        c = _RE_CLOTURE.match(ligne.lstrip())
+        if c:
+            if not code:
+                code = c.group(1)   # bloc de code ouvert : il se ferme par la meme cloture (au moins aussi longue)
+            elif c.group(1)[0] == code[0] and len(c.group(1)) >= len(code):
+                code = ''
+        m = None if code or c else re.match(r'^(#{1,6})\s+(.+?)\s*#*\s*$', ligne)
         if m:
             table.append((m.group(2), len(m.group(1)), pos))
         pos += len(ligne) + 1
@@ -358,7 +421,7 @@ def docx_reperes(root, styles=None):
                 s.append(n.text or '')
             elif n.tag == ns + 'tab' and n not in taquets:
                 s.append('\t')
-            elif n.tag == ns + 'br':
+            elif n.tag in (ns + 'br', ns + 'cr'):
                 if n.get(ns + 'type') == 'page':
                     pages.append(debut + len(''.join(s)) + 1)
                 s.append('\n')

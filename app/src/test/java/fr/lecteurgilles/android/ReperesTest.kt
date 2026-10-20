@@ -23,6 +23,15 @@ class ReperesTest {
         assertEquals(listOf("1. Introduction","2. Portrait","2.1 Détails","3. Fin"),
             titres("1. Introduction\nTexte :\n1. Un\n2. Deux\n3. Trois\n2. Portrait\n2.1 Détails\nTexte.\n3. Fin\nTexte."))
         assertEquals(listOf("Notes"),titres("Ingrédients\n1 L de bouillon\nConclusion : ils étaient perdus, mais ensemble.\nNotes"))
+        // contre-audit (mêmes cas que test_reperes.py)
+        assertEquals(listOf("Première partie","Chapitre 1","Chapitre 2","Deuxième partie","Chapitre 1","Chapitre 2"),titres("Première partie\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nDeuxième partie\nChapitre 1\nTexte.\nChapitre 2\nTexte."))
+        assertEquals(listOf("Première partie","I","II","Deuxième partie","I","II"),titres("Première partie\nI\nTexte.\nII\nTexte.\nDeuxième partie\nI\nTexte.\nII\nTexte."))
+        assertEquals(listOf("Chapitre 1"),titres("Chapitre 1\nTexte.\nPartie depuis trois jours.\nLivre-moi ça.\nTexte."))
+        assertEquals(listOf("1","2","– 3 –"),titres("1\n\nTexte.\n\n2\n\nTexte.\n– 3 –\nTexte."))
+        assertEquals(listOf("Sommaire","Chapitre 1 La neige"),titres("Sommaire\nChapitre 1 La neige 7\n\nChapitre 1 La neige\nTexte."))
+        assertEquals(listOf("Chapitre 1","Chapitre 2","Chapitre 12"),titres("Chapitre 1\nTexte.\nChapitre 1\nTexte.\nChapitre 2\nTexte.\nChapitre 12\nTexte."))
+        val s="Texte.\n1\n\nChapitre 1\nTexte.\n2"
+        assertEquals(listOf("Chapitre 1"),Reperes.chapitresDevines(s,listOf(0,s.indexOf("Chapitre"))).map{it.titre})
         // recherche d'un signet : la ligne qui est le titre, pas sa première mention
         val t="Il pense au soir.\nLe soir\nTexte."
         assertEquals(t.indexOf("Le soir"),Reperes.chercher(t,"le soir",0,t.length))

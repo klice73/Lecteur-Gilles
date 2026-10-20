@@ -104,14 +104,29 @@ class MainActivity : Activity() {
     private var reperes:Reperes?=null
     private var reperesHash=""
     private val reperesFile by lazy { File(filesDir,"reperes.json") }
-    private fun setReperes(r:Reperes){
-        reperes=r;reperesHash=empreinte(editor.text)
-        try{
-            val o=org.json.JSONObject().put("empreinte",reperesHash).put("source",r.source)
-            o.put("pages",org.json.JSONArray().apply{r.pages.forEach{put(org.json.JSONArray().put(it.first).put(it.second))}})
-            o.put("table",org.json.JSONArray().apply{r.table.forEach{put(org.json.JSONArray().put(it.titre).put(it.niveau).put(it.debut))}})
-            reperesFile.writeText(o.toString())
-        }catch(_:Exception){}
+    private fun setReperes(r:Reperes,h:String=empreinte(editor.text)){
+        reperes=r;reperesHash=h
+        Thread{   // écriture du fichier hors du fil d'affichage (gros livre)
+            try{
+                val o=org.json.JSONObject().put("empreinte",h).put("source",r.source)
+                o.put("pages",org.json.JSONArray().apply{r.pages.forEach{put(org.json.JSONArray().put(it.first).put(it.second))}})
+                o.put("table",org.json.JSONArray().apply{r.table.forEach{put(org.json.JSONArray().put(it.titre).put(it.niveau).put(it.debut))}})
+                synchronized(reperesFile){reperesFile.writeText(o.toString())}
+            }catch(_:Exception){}
+        }.start()
+    }
+    private var reperage=0
+    /** Repères du texte affiché, calculés hors du fil d'affichage s'il faut deviner les chapitres
+     *  (un gros texte collé prendrait plusieurs secondes et figerait l'application). */
+    private fun avecReperes(annoncer:Boolean,apres:(Reperes)->Unit){
+        val h=empreinte(editor.text)
+        reperes?.let{if(reperesHash==h){apres(it);return}}
+        val texte=editor.text.toString(); val g=++reperage
+        if(annoncer)status.text="Repérage des chapitres…"
+        Thread{
+            val r=try{Reperes(emptyList(),Reperes.chapitresDevines(texte),"devinee")}catch(_:Throwable){Reperes(emptyList(),emptyList(),"devinee")}
+            ui{if(g==reperage && empreinte(editor.text)==h){setReperes(r,h);apres(r)}}
+        }.start()
     }
     private fun loadReperes(){
         try{
@@ -124,7 +139,7 @@ class MainActivity : Activity() {
             reperesHash=o.getString("empreinte")
         }catch(_:Exception){}
     }
-    /** Repères du texte affiché : ceux du document ouvert, sinon chapitres devinés d'après les titres. */
+    /** Repères du texte affiché, calcul immédiat (utilisé par les tests émulés ; l'interface passe par avecReperes). */
     private fun reperesActuels():Reperes{
         val h=empreinte(editor.text)
         reperes?.let{if(reperesHash==h)return it}
@@ -159,7 +174,9 @@ class MainActivity : Activity() {
     }
     private fun allerA(){
         if(editor.text.isEmpty())return
-        val r=reperesActuels()
+        avecReperes(true){r->if(!isFinishing)dialogueAllerA(r)}
+    }
+    private fun dialogueAllerA(r:Reperes){
         val ici=r.titre(editor.selectionStart)
         val entrees=ArrayList<String>()
         entrees.add(if(r.pages.isNotEmpty()) "📄 Aller à une page… (« ${r.pages.first().first} » à « ${r.pages.last().first} »)" else "📍 Aller à une position du texte (%)…")
@@ -293,7 +310,7 @@ class MainActivity : Activity() {
         if(text.isBlank()){status.text=if(fromCursor) "Le curseur est à la fin du texte. Placez-le avant le passage à lire." else "Ajoutez un texte à lire.";return}
         if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return}
         readingHash=empreinte(fullText);saveText()
-        reperesActuels()   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
+        avecReperes(false){}   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
         active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         worker.execute {

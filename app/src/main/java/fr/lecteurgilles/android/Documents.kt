@@ -28,18 +28,20 @@ object Documents {
         return r
     }
 
-    private fun devinee(t:String,pages:List<Pair<String,Int>> = emptyList())=Reperes(pages,Reperes.chapitresDevines(t),"devinee")
+    // pages connues (PDF) : un numéro seul en haut ou en bas de page est un numéro de page, pas un chapitre
+    private fun devinee(t:String,pages:List<Pair<String,Int>> = emptyList())=Reperes(pages,Reperes.chapitresDevines(t,pages.map{it.second}),"devinee")
 
     fun texte(brut:String,markdown:Boolean):Resultat {
-        val t=brut.replace("\r\n","\n").replace('\r','\n')
+        val t=brut.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n')   // marque BOM retirée, comme utf-8-sig sous Windows
         if(markdown){
             val table=ArrayList<Titre>(); var pos=0
             val titre=Regex("^(#{1,6})\\s+(.+?)\\s*#*\\s*$")
-            var code=false
+            var code=""   // clôture du bloc de code ouvert (``` ou ~~~), comme reperes_markdown()
+            val cloture=Regex("^(`{3,}|~{3,})")
             for(l in t.split('\n')){
-                val d=l.trimStart()
-                if(d.startsWith("```") || d.startsWith("~~~"))code=!code
-                if(!code)titre.find(l)?.let{table.add(Titre(it.groupValues[2],it.groupValues[1].length,pos))}
+                val c=cloture.find(l.trimStart())?.groupValues?.get(1)
+                if(c!=null){ if(code.isEmpty())code=c else if(c[0]==code[0] && c.length>=code.length)code="" }
+                if(code.isEmpty() && c==null)titre.find(l)?.let{table.add(Titre(it.groupValues[2],it.groupValues[1].length,pos))}
                 pos+=l.length+1
             }
             if(table.isNotEmpty())return Resultat(t,Reperes(emptyList(),table,"titres"))
@@ -56,14 +58,21 @@ object Documents {
         for(p in pages){debuts.add(pos);pos+=p.length+2}
         val etiquettes=try{doc.documentCatalog.pageLabels?.labelsByPageIndices?.toList()?.takeIf{it.size==n}}catch(_:Exception){null}
             ?:(1..n).map{it.toString()}
-        val table=ArrayList<Titre>()
+        val table=ArrayList<Titre>(); val dernier=HashMap<Int,Int>()
         fun parcourir(noeud:PDOutlineNode,niveau:Int){
             for(item in noeud.children()){
                 try{
                     val page=item.findDestinationPage(doc)
                     val i=if(page!=null) doc.pages.indexOf(page) else -1
                     val titre=(item.title?:"").trim()
-                    if(i in 0 until n && titre.isNotEmpty())table.add(Titre(titre,niveau,Reperes.chercher(texte,titre,debuts[i],debuts[i]+pages[i].length)))
+                    if(i in 0 until n && titre.isNotEmpty()){
+                        // plusieurs signets sur une page : chacun cherché après le précédent, comme reperes_pdf()
+                        val fin=debuts[i]+pages[i].length; val depart=dernier[i]?:debuts[i]
+                        var pos=Reperes.chercher(texte,titre,depart,fin)
+                        if(pos==depart && depart!=debuts[i])pos=Reperes.chercher(texte,titre,debuts[i],fin)
+                        dernier[i]=pos+1
+                        table.add(Titre(titre,niveau,pos))
+                    }
                 }catch(_:Exception){}
                 if(item.hasChildren())parcourir(item,niveau+1)
             }

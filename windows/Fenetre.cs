@@ -158,10 +158,13 @@ class Lecteur : Form {
         } catch(Exception) {}
     }
     /// Reperes du texte affiche : ceux du document importe, sinon chapitres devines par documents.py.
+    string echecReperes;
     bool ReperesAJour() {
         if(empreinteReperes!=null && empreinteReperes==EmpreinteActuelle())return true;
         // reperes d'un autre texte : jamais affiches, meme si documents.py echoue
         pageEtiquettes=new string[0];pageDebuts=new int[0];tableTitres=new string[0];tableNiveaux=new int[0];tableDebuts=new int[0];sourceTable="";empreinteReperes=null;
+        if(echecReperes!=null && echecReperes==EmpreinteActuelle())return false;   // deja essaye sans succes pour ce texte : ne pas refaire attendre
+        echecReperes=EmpreinteActuelle();
         try {
             string entree=Path.Combine(temp,"texte-reperes.txt"),sortie=Path.Combine(temp,"reperes.json");
             File.WriteAllText(entree,texte.Text,new UTF8Encoding(false));if(File.Exists(sortie))File.Delete(sortie);
@@ -170,7 +173,7 @@ class Lecteur : Form {
             using(var p=Process.Start(info)) {if(!p.WaitForExit(20000)) {try{p.Kill();}catch{}return false;}}
             var d=new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Deserialize<Dictionary<string,object>>(File.ReadAllText(sortie,Encoding.UTF8));
             if(d.ContainsKey("error"))return false;
-            LireReperes(d);empreinteReperes=EmpreinteActuelle();SauverReperes();return true;
+            LireReperes(d);empreinteReperes=EmpreinteActuelle();SauverReperes();echecReperes=null;return true;
         } catch(Exception) {return false;} finally {Cursor=Cursors.Default;}
     }
     string DescriptionReperes() {

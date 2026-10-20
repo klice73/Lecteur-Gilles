@@ -65,8 +65,14 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
             return total
         }
         private fun valeur(num:String):Int{val d=num.substringAfterLast('.');return d.toIntOrNull()?:romain(d)}
-        /** Titres reconnus dans un texte sans table (« Chapitre 3 », « Première partie », « III » seul…). */
-        fun chapitresDevines(texte:String):List<Titre> {
+        private val NOMBRES_MOTS=listOf("UN","DEUX","TROIS","QUATRE","CINQ","SIX","SEPT","HUIT","NEUF","DIX","ONZE","DOUZE",
+            "TREIZE","QUATORZE","QUINZE","SEIZE","DIX-SEPT","DIX-HUIT","DIX-NEUF","VINGT")
+        private val nombreSeul=Regex("(?d)^(?:[–—-]$E*)?([0-9]{1,3})(?:$E*[–—-])?$")
+        private val suiteLong=Regex("(?d)^(?:$|$E*[:.–—-](?:$|$E)|$E+(?:[0-9]{1,4}|[ivxlc]{1,7}|[a-z]|premi[eè]re?|premier|derni[eè]re?|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt)(?=$|$E|[.:)–—,-]))",RegexOption.IGNORE_CASE)
+        private data class Trouve(val titre:String,val niveau:Int,val debut:Int,val ligne:Int)
+        /** Titres reconnus dans un texte sans table (« Chapitre 3 », « Première partie », « III » ou « 3 » seuls…).
+         *  pages : débuts des pages (PDF) ; un numéro seul en haut ou en bas d'une page n'est pas un titre. */
+        fun chapitresDevines(texte:String,pages:List<Int>?=null):List<Titre> {
             val lignes=texte.split('\n')
             val nets=lignes.map{nettoyer(it)}
             val num=nets.map{numero.find(it)}
@@ -81,57 +87,91 @@ class Reperes(pages:List<Pair<String,Int>>,table:List<Titre>,val source:String) 
                 }
                 return false
             }
-            val res=ArrayList<Titre>()
-            val majeur=hashMapOf("arabe" to 0,"romain" to 0,"seul" to 0)
+            val bord=HashSet<Int>()
+            if(!pages.isNullOrEmpty()){
+                val tri=pages.sorted()
+                fun pageDe(x:Int):Int{var bas=0;var haut=tri.size;while(bas<haut){val m=(bas+haut)/2;if(tri[m]<=x)bas=m+1 else haut=m};return bas}
+                val debutsLignes=IntArray(lignes.size); var q=0
+                for((k,l) in lignes.withIndex()){debutsLignes[k]=q;q+=l.length+1}
+                val pageDeLigne=debutsLignes.map{pageDe(it)}
+                for(k in lignes.indices) if(nets[k].isNotEmpty()){
+                    val av=voisin(k,-1); val ap=voisin(k,1)
+                    if(av==null || pageDeLigne[av]!=pageDeLigne[k] || ap==null || pageDeLigne[ap]!=pageDeLigne[k])bord.add(k)
+                }
+            }
+            var res=ArrayList<Trouve>()
+            val majeur=hashMapOf("arabe" to 0,"romain" to 0,"seul" to 0,"nombre" to 0,"mot" to 0)
             var pos=0
             for((k,ligne) in lignes.withIndex()){
                 val debut=pos; pos+=ligne.length+1
                 val s=nets[k]
-                if(longueur(s) !in 2..90 && romainSeul.find(s)==null)continue
+                if(longueur(s) !in 2..90 && romainSeul.find(s)==null && nombreSeul.find(s)==null)continue
                 if(s.isEmpty() || s.last() in ",;" || pointilles.containsMatchIn(s))continue
                 val av=voisin(k,-1); val ap=voisin(k,1)
                 val suiteTable=finNb[k] && ((av!=null && finNb[av]) || (ap!=null && finNb[ap]))
                 val ici=debut+(ligne.length-ligne.trimStart{it in ESP || it=='\r'}.length)
                 val nm=mots(s)
-                if(titreNu.find(s)!=null){
-                    val m=motTitre.find(s)?:ordinal.find(s)
-                    val mot=m?.groupValues?.get(1)?.lowercase(java.util.Locale.ROOT)?:""
-                    res.add(Titre(s,if(mot in NIVEAU_UN) 1 else 2,ici));continue
-                }
                 val m=motTitre.find(s)?:ordinal.find(s)
-                if(m!=null){
-                    val mot=m.groupValues[1].lowercase(java.util.Locale.ROOT)
+                val mot=m?.groupValues?.get(1)?.lowercase(java.util.Locale.ROOT)?:""
+                if(titreNu.find(s)!=null){
+                    res.add(Trouve(s,if(mot in NIVEAU_UN) 1 else 2,ici,k))
+                }else if(m!=null){
                     if(suiteTable)continue
-                    if(mot in LONGS){ if(s.endsWith(".") && nm>6)continue }
+                    if(mot in LONGS){
+                        // « Partie depuis trois jours. », « Livre-moi ça. » : pas des titres
+                        if(suiteLong.find(s.substring(m.groups[1]!!.range.last+1))==null || (s.endsWith(".") && nm>6))continue
+                    }
                     else if(longueur(s)>60 || (s.last() in ".!?" && nm>2))continue
-                    res.add(Titre(s,if(mot in NIVEAU_UN) 1 else 2,ici));continue
-                }
-                val r=romainSeul.find(s)
-                if(r!=null){
-                    val v=romain(r.groupValues[1])
-                    if(v==majeur.getValue("seul")+1){majeur["seul"]=v;res.add(Titre(s,2,ici))}
+                    res.add(Trouve(s,if(mot in NIVEAU_UN) 1 else 2,ici,k))
+                }else{
+                    val r=romainSeul.find(s); val c=nombreSeul.find(s)
+                    if(r!=null || c!=null || s in NOMBRES_MOTS){
+                        if(k in bord)continue
+                        val (sorte,v)=if(r!=null) "seul" to romain(r.groupValues[1]) else if(c!=null) "nombre" to c.groupValues[1].toInt() else "mot" to NOMBRES_MOTS.indexOf(s)+1
+                        if(v==majeur.getValue(sorte)+1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
+                        continue
+                    }
+                    val n=num[k]
+                    if(n==null || nm>12 || s.last() in ".:" || suiteTable)continue
+                    if(dansListe(k,av,ap))continue
+                    val nb=n.groupValues[1]
+                    if('.' in nb){
+                        if(majeur.getValue("arabe")>0 && nb.substringBefore('.').toInt()==majeur.getValue("arabe"))res.add(Trouve(s,3,ici,k))
+                        continue
+                    }
+                    val sorte=if(nb[0].isDigit()) "arabe" else "romain"
+                    val v=if(sorte=="arabe") nb.toInt() else romain(nb)
+                    if(v==majeur.getValue(sorte)+1){majeur[sorte]=v;res.add(Trouve(s,2,ici,k))}
                     continue
                 }
-                val n=num[k]
-                if(n==null || nm>12 || s.last() in ".:" || suiteTable)continue
-                if(dansListe(k,av,ap))continue
-                val nb=n.groupValues[1]
-                if('.' in nb){
-                    if(majeur.getValue("arabe")>0 && nb.substringBefore('.').toInt()==majeur.getValue("arabe"))res.add(Titre(s,3,ici))
-                    continue
-                }
-                val sorte=if(nb[0].isDigit()) "arabe" else "romain"
-                val v=if(sorte=="arabe") nb.toInt() else romain(nb)
-                if(v==majeur.getValue(sorte)+1){majeur[sorte]=v;res.add(Titre(s,2,ici))}
+                if(res.last().niveau==1) for(x in majeur.keys.toList())majeur[x]=0   // nouvelle partie : la numérotation repart
             }
-            // même titre deux fois (table imprimée puis corps du livre) : garder le dernier
-            val vus=HashMap<String,Int>(); val fin=ArrayList<Titre?>()
-            for(t in res){
-                val cle=t.titre.lowercase(java.util.Locale.ROOT).split(espaces).filter{it.isNotEmpty()}.joinToString(" ")
-                vus[cle]?.let{fin[it]=null}
-                vus[cle]=fin.size; fin.add(t)
+            // numéros seuls trop rapprochés (moins de 1500 caractères en moyenne) : numéros de page
+            val seuls=res.filter{nombreSeul.find(it.titre)!=null}
+            if(seuls.size>=10 && (seuls.last().debut-seuls.first().debut).toDouble()/(seuls.size-1)<1500)
+                res=ArrayList(res.filter{nombreSeul.find(it.titre)==null})
+            // Doublons. 1) même titre répété sans autre titre entre (en-tête courant) : garder le premier.
+            // 2) table imprimée (au moins 3 titres sur des lignes qui se suivent, ou suite d'un « Sommaire ») :
+            //    retirer ses entrées qui réapparaissent plus loin dans le livre.
+            fun cle(titre:String)=titre.lowercase(java.util.Locale.ROOT).split(espaces).filter{it.isNotEmpty()}.joinToString(" ")
+            fun cleTable(titre:String):String{val c=cle(titre);return if(c.count{it==' '}>=2) finNombre.replace(c,"") else c}
+            val garde=ArrayList<Trouve>()
+            for(x in res){ if(garde.isNotEmpty() && cle(garde.last().titre)==cle(x.titre))continue; garde.add(x) }
+            val blocs=ArrayList<List<Trouve>>(); var bloc=ArrayList<Trouve>()
+            for(x in garde){
+                if(bloc.isNotEmpty() && voisin(bloc.last().ligne,1)==x.ligne)bloc.add(x)
+                else{ if(bloc.isNotEmpty())blocs.add(bloc); bloc=arrayListOf(x) }
             }
-            var r=fin.filterNotNull().take(2000)
+            if(bloc.isNotEmpty())blocs.add(bloc)
+            val retires=HashSet<Int>()
+            for(b in blocs){
+                val mm=motTitre.find(b[0].titre)?:ordinal.find(b[0].titre)
+                val sommaire=mm!=null && mm.groupValues[1].lowercase(java.util.Locale.ROOT) in setOf("sommaire","table des matières")
+                if(b.size<3 && !(sommaire && b.size>=2))continue
+                for(x in if(sommaire) b.drop(1) else b)
+                    if(garde.any{y->cleTable(y.titre)==cleTable(x.titre) && y.ligne>x.ligne})retires.add(x.ligne)
+            }
+            var r=garde.filter{it.ligne !in retires}.take(2000).map{Titre(it.titre,it.niveau,it.debut)}
             if(r.isNotEmpty()){val d=r.minOf{it.niveau}-1; if(d>0)r=r.map{it.copy(niveau=it.niveau-d)}}
             return r
         }
