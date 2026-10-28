@@ -1,5 +1,5 @@
-Voix Tom (fr_FR-tom-medium) : licence et conditions d'usage copiees du README du depot amont
-https://github.com/tjiho/French-tts-model-piper (miroir de https://git.bksp.space/Tjiho/French-tts-model-piper), lu le 28 octobre 2026.
+Voix Tom (fr_FR-tom-medium) : licence et conditions d'usage copiées du README du dépôt amont
+https://github.com/tjiho/French-tts-model-piper (miroir de https://git.bksp.space/Tjiho/French-tts-model-piper), lu le 28 octobre 2026. Le fichier LICENSE cité ci-dessous est joint sous le nom AGPL-3.0.txt.
 
 ## Licence et conditions d'usage (FR)
 

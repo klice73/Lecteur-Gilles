@@ -327,7 +327,7 @@ class MainActivity : Activity() {
     /** Voix livrées dans l'APK (1.9) : nom affiché, dossier des assets, modèle, marque de copie, lenteur propre. */
     private class Voix(val nom:String,val dossier:String,val modele:String,val marque:String,val lenteur:Float)
     private val voixDisponibles=listOf(
-        Voix("Tom (posé)","vits-piper-fr_FR-tom-medium","fr_FR-tom-medium.onnx","ready-tom-1",1.12f),   // 12 % plus lent, choisi par l'utilisateur
+        Voix("Tom (posé)","vits-piper-fr_FR-tom-medium","fr_FR-tom-medium.onnx","ready-tom-1",1.12f),   // lecture 12 % plus longue, choisie par l'utilisateur
         Voix("Gilles","vits-piper-fr_FR-gilles-low","fr_FR-gilles-low.onnx","ready-voix-plafonnee-1",1f))
     private var voixMoteur:String?=null // Access only on worker
     private fun getEngine(v:Voix):OfflineTts {

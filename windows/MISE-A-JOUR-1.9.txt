@@ -9,7 +9,7 @@ Nouveautes de la 1.9
     et l'enregistrement WAV fonctionnent aussi avec Tom.
   - Tom est en qualite moyenne a 44 100 Hz : un peu plus de calcul que Gilles.
   - Licence de la voix Tom : AGPL-3.0, avec une autorisation d'usage de la voix a deux
-    conditions (voir licences\__Tom-CONDITIONS-USAGE.txt et THIRD_PARTY_NOTICES.md) :
+    conditions (voir licences\Tom-CONDITIONS-USAGE.txt et THIRD_PARTY_NOTICES.md) :
     ne pas presenter la voix comme celle d'une personne reelle ou identifiee, et publier
     sous AGPL-3.0 tout modele de voix entraine a partir de Tom ou de l'audio qu'il produit.
 
