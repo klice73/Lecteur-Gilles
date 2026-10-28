@@ -209,6 +209,7 @@ class MainActivity : Activity() {
     private lateinit var playFromCursor: Button
     private lateinit var resume: Button
     private lateinit var speed: Spinner
+    private lateinit var voixChoix: Spinner
     private val worker = Executors.newSingleThreadExecutor()
     private val generation = AtomicInteger()
     @Volatile private var paused = false
@@ -241,7 +242,10 @@ class MainActivity : Activity() {
         tools.addView(button("☰ Aller à…") { allerA() }, LinearLayout.LayoutParams(0,dp(56),0.7f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
-        layout.addView(speed)
+        voixChoix = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,voixDisponibles.map{"Voix : "+it.nom});setSelection(getPreferences(MODE_PRIVATE).getInt("voix",0).coerceIn(0,voixDisponibles.size-1)) }
+        val reglages=LinearLayout(this)
+        reglages.addView(speed,LinearLayout.LayoutParams(0,-2,1f));reglages.addView(voixChoix,LinearLayout.LayoutParams(0,-2,1f))
+        layout.addView(reglages)
         editor = EditText(this).apply {
             hint="Collez votre texte ou ouvrez un PDF, DOCX, ODT, HTML ou TXT."
             textSize=18f; gravity=android.view.Gravity.TOP
@@ -308,7 +312,7 @@ class MainActivity : Activity() {
     private fun button(label:String,action:()->Unit)=Button(this).apply {text=label;isAllCaps=false;setOnClickListener{action()}}
     private fun ui(job:()->Unit) {runOnUiThread {if(!destroyed)job()}}
     private fun message(text:String){ui {status.text=text}}
-    private fun controls(){playFromCursor.isEnabled=!active;resume.isEnabled=!active&&savedPosition()>=0;editor.isEnabled=!active;speed.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
+    private fun controls(){playFromCursor.isEnabled=!active;resume.isEnabled=!active&&savedPosition()>=0;editor.isEnabled=!active;speed.isEnabled=!active;voixChoix.isEnabled=!active;play.text=if(paused)"▶ Continuer" else "▶ Lire tout";pause.isEnabled=active&&!paused}
     private fun stopReading(){if(active)savePosition();generation.incrementAndGet();spokenSpans.clear();clearHighlight();active=false;paused=false;track?.let {try{it.pause();it.flush()}catch(_:IllegalStateException){}};audioManager.abandonAudioFocusRequest(focus);window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);controls();status.text="Arrêté."}
     private fun pauseReading(){if(!active||paused)return;paused=true;savePosition();track?.let{try{it.pause()}catch(_:IllegalStateException){}};controls();status.text="En pause. ▶ Continuer reprend au même endroit.";window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
     private fun resumeReading(){if(audioManager.requestAudioFocus(focus)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){status.text="La sortie audio est occupée.";return};paused=false;track?.play();controls();status.text="Lecture reprise.";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)}
@@ -319,14 +323,20 @@ class MainActivity : Activity() {
         if(files.isEmpty()){target.parentFile?.mkdirs();assets.open(path).use{input->target.outputStream().use{input.copyTo(it)}}}
         else{target.mkdirs();for(name in files)copyAssets("$path/$name",File(target,name))}
     }
-    private fun getEngine():OfflineTts {
-        engine?.let{return it}
-        val name="vits-piper-fr_FR-gilles-low"
-        val dir=File(filesDir,name)
-        val marque="ready-voix-plafonnee-1" // changer ce nom à chaque nouvelle voix livrée dans l’APK
-        if(!File(dir,marque).exists()){dir.deleteRecursively();copyAssets(name,dir);File(dir,marque).writeText("ok")}
+    /** Voix livrées dans l'APK (1.9) : nom affiché, dossier des assets, modèle, marque de copie, lenteur propre. */
+    private class Voix(val nom:String,val dossier:String,val modele:String,val marque:String,val lenteur:Float)
+    private val voixDisponibles=listOf(
+        Voix("Tom (posé)","vits-piper-fr_FR-tom-medium","fr_FR-tom-medium.onnx","ready-tom-1",1.12f),   // 12 % plus lent, choisi par l'utilisateur
+        Voix("Gilles","vits-piper-fr_FR-gilles-low","fr_FR-gilles-low.onnx","ready-voix-plafonnee-1",1f))
+    private var voixMoteur:String?=null // Access only on worker
+    private fun getEngine(v:Voix):OfflineTts {
+        engine?.let{if(voixMoteur==v.dossier)return it; it.release(); engine=null}
+        val dir=File(filesDir,v.dossier)
+        // changer la marque à chaque nouvelle version d'une voix livrée dans l'APK
+        if(!File(dir,v.marque).exists()){dir.deleteRecursively();copyAssets(v.dossier,dir);File(dir,v.marque).writeText("ok")}
+        voixMoteur=v.dossier
         return OfflineTts(config=OfflineTtsConfig(model=OfflineTtsModelConfig(
-            vits=OfflineTtsVitsModelConfig(model=File(dir,"fr_FR-gilles-low.onnx").path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=2),maxNumSentences=1)).also{engine=it}
+            vits=OfflineTtsVitsModelConfig(model=File(dir,v.modele).path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=2),maxNumSentences=1)).also{engine=it}
     }
     private fun startReading(fromCursor:Boolean=false){
         if(active)return
@@ -338,13 +348,15 @@ class MainActivity : Activity() {
         readingHash=empreinte(fullText);saveText()
         val lexique=chargerLexique()
         avecReperes(false){}   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
-        val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]
-        active=true;paused=false;controls();status.text="Préparation de Gilles…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val v=voixDisponibles[voixChoix.selectedItemPosition.coerceIn(0,voixDisponibles.size-1)]
+        getPreferences(MODE_PRIVATE).edit().putInt("voix",voixChoix.selectedItemPosition).apply()
+        val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]/v.lenteur
+        active=true;paused=false;controls();status.text="Préparation de ${v.nom.substringBefore(' ')}…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         worker.execute {
             var output:AudioTrack?=null
             var finished=false
             try {
-                val tts=getEngine();if(id!=generation.get())return@execute
+                val tts=getEngine(v);if(id!=generation.get())return@execute
                 val sampleRate=tts.sampleRate()
                 output=AudioTrack.Builder().setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                     .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())

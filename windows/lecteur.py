@@ -316,6 +316,8 @@ def synthese_minutee(voice, passage, config, lexique=(None, {})):
 
 ROOT = Path(__file__).resolve().parent
 VOICE = ROOT / 'voix' / 'fr_FR-siwis-medium.onnx'
+# Voix connues et leur lenteur propre (1.9 : Tom « posé », 12 % plus lent, choisi par l'utilisateur)
+VOIX = {'fr_FR-siwis-medium': 1.0, 'fr_FR-gilles-low': 1.0, 'fr_FR-tom-medium': 1.12}
 os.environ['TCL_LIBRARY'] = str(ROOT / 'tcl' / 'tcl8.6')
 os.environ['TK_LIBRARY'] = str(ROOT / 'tcl' / 'tk8.6')
 
@@ -324,10 +326,10 @@ def synthesize(request, output, streaming=False):
     from piper import PiperVoice, SynthesisConfig
     data = json.loads(Path(request).read_text(encoding='utf-8'))
     selected = data.get('voice', 'fr_FR-siwis-medium')
-    if selected not in ('fr_FR-siwis-medium', 'fr_FR-gilles-low'):
+    if selected not in VOIX:
         raise ValueError('Voix non prise en charge')
     voice = PiperVoice.load(str(ROOT / 'voix' / (selected + '.onnx')))
-    config = SynthesisConfig(length_scale=1.0 / data['speed'])
+    config = SynthesisConfig(length_scale=VOIX[selected] / data['speed'])
     lexique = charger_lexique()
     parts = (p for p in text_parts(data['text']) if p.strip())
     if streaming:

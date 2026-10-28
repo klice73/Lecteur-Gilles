@@ -100,7 +100,11 @@ jobs:
           # meme voix pour Windows, avec la duree de chaque son exposee (surlignage mot a mot exact)
           python plafonner_voix.py voix-apk.onnx fr_FR-gilles-low.onnx --alignement
           unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx.json > fr_FR-gilles-low.onnx.json
-          sha256sum fr_FR-gilles-low.onnx Lecteur-Gilles-Android.apk > SHA256SUMS.txt
+          # version 1.9 : voix Tom (posee), presente dans l'APK ; pour Windows, duree de chaque son exposee (audio inchange)
+          unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-tom-medium/fr_FR-tom-medium.onnx > tom-apk.onnx
+          python aligner_voix.py tom-apk.onnx fr_FR-tom-medium.onnx
+          unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-tom-medium/fr_FR-tom-medium.onnx.json > fr_FR-tom-medium.onnx.json
+          sha256sum fr_FR-gilles-low.onnx fr_FR-tom-medium.onnx Lecteur-Gilles-Android.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Lecteur-Gilles-Android
@@ -116,7 +120,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.8.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.8.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.9.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.9.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -134,7 +138,7 @@ jobs:
         run: |
           $tag="test-${{ github.run_number }}"
           New-Item -ItemType Directory -Force windows\voix | Out-Null
-          gh release download $tag -p "fr_FR-gilles-low.onnx*" -D windows\voix
+          gh release download $tag -p "fr_FR-*.onnx*" -D windows\voix
           Get-ChildItem windows\voix
       - name: Moteur Python du lecteur
         shell: pwsh
@@ -151,6 +155,16 @@ jobs:
           $j=Get-Content windows\flux\part-000001.json -Raw | ConvertFrom-Json
           "mots: $($j.mots.Count)  phrases: $($j.phrases.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
           if($j.mots.Count -lt 20 -or $j.exactes -lt 1){throw "minutage incomplet"}
+      - name: Minutage mot à mot avec la voix Tom (posé)
+        shell: pwsh
+        run: |
+          $req=@{text="Bonjour, je suis Tom. Le vent souffle dans les champs de blé, on entend un chant lointain. Fin du test.";speed=1.0;voice="fr_FR-tom-medium"} | ConvertTo-Json
+          [IO.File]::WriteAllText("$PWD\windows\req-tom.json",$req,(New-Object Text.UTF8Encoding $false))
+          windows\runtime\Scripts\python.exe windows\lecteur.py --stream windows\req-tom.json windows\flux-tom
+          if($LASTEXITCODE -ne 0){throw "lecteur.py (Tom) en echec"}
+          $j=Get-Content windows\flux-tom\part-000001.json -Raw | ConvertFrom-Json
+          "Tom - mots: $($j.mots.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
+          if($j.mots.Count -lt 15 -or $j.exactes -lt 1){throw "minutage Tom incomplet"}
       - name: Repères des documents (pages, table des matières)
         shell: pwsh
         run: |
@@ -188,7 +202,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
-          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.8.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
-          Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json paquet\voix\
-          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.8.zip
-          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.8.zip
+          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.9.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
+          Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json,windows\voix\fr_FR-tom-medium.onnx,windows\voix\fr_FR-tom-medium.onnx.json paquet\voix\
+          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.9.zip
+          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.9.zip

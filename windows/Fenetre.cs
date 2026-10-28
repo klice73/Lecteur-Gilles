@@ -33,6 +33,7 @@ class Lecteur : Form {
     ComboBox vitesse = new ComboBox();
     Process travail;
     ComboBox voix = new ComboBox();
+    List<string> fichiersVoix = new List<string>();
     CheckBox nettoyerPdf = new CheckBox { Text="Ignorer les en-têtes et numéros de page (PDF)", Checked=true, AutoSize=true, Margin=new Padding(14,10,0,0) };
     Button lire, pause, lireCurseur;
     bool audioOuvert, suspendu;
@@ -95,7 +96,11 @@ class Lecteur : Form {
         vitesse.Items.AddRange(new object[]{"0.75","0.9","1.0","1.1","1.25","1.5"}); vitesse.SelectedIndex=2; outils.Controls.Add(vitesse);
         outils.SetFlowBreak(vitesse,true);
         outils.Controls.Add(new Label {Text="Voix",AutoSize=true,Margin=new Padding(4,10,10,0)});
-        voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;voix.Items.AddRange(new object[]{"Gilles", "Siwis"});voix.SelectedIndex=0;outils.Controls.Add(voix);
+        voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;
+        // Tom (posé) en premier quand ses fichiers sont installés (version 1.9)
+        if(File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx"))) {voix.Items.Add("Tom (posé)");fichiersVoix.Add("fr_FR-tom-medium");}
+        voix.Items.Add("Gilles");fichiersVoix.Add("fr_FR-gilles-low");voix.Items.Add("Siwis");fichiersVoix.Add("fr_FR-siwis-medium");
+        voix.SelectedIndex=0;outils.Controls.Add(voix);
         outils.Controls.Add(nettoyerPdf);
         texte.Multiline=true; texte.ScrollBars=RichTextBoxScrollBars.Vertical; texte.Dock=DockStyle.Fill; texte.Font=new Font("Segoe UI",14); texte.DetectUrls=false;
         texte.Text="Bonjour ! Bienvenue dans votre lecteur Piper.\r\n\r\nCollez votre texte ici, puis cliquez sur Lire."; grille.Controls.Add(texte,0,2);
@@ -471,7 +476,7 @@ class Lecteur : Form {
         Arreter(); debutLecture=depart; importation=false; destination=chemin; erreur="";
         empreinteLecture=EmpreinteActuelle();
         var donnees=new Dictionary<string,object>(); donnees["text"]=texte.Text.Substring(depart); donnees["speed"]=double.Parse((string)vitesse.SelectedItem,System.Globalization.CultureInfo.InvariantCulture);
-        donnees["voice"]=voix.SelectedIndex==0?"fr_FR-gilles-low":"fr_FR-siwis-medium";
+        donnees["voice"]=fichiersVoix[Math.Max(0,voix.SelectedIndex)];
         File.WriteAllText(Path.Combine(temp,"request.json"),new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Serialize(donnees),new System.Text.UTF8Encoding(false));
         var info=new ProcessStartInfo(Path.Combine(racine,"runtime","Scripts","python.exe"));
         lectureProgressive=!sauver;passage=0;audioCourant=null;
