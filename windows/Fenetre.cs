@@ -484,10 +484,25 @@ class Lecteur : Form {
         info.Arguments="\""+Path.Combine(racine,"lecteur.py")+"\" "+(lectureProgressive?"--stream":"--synthesize")+" \""+Path.Combine(temp,"request.json")+"\" \""+(lectureProgressive?dossierLecture:Path.Combine(temp,"lecture.wav"))+"\"";
         info.UseShellExecute=false; info.CreateNoWindow=true; info.RedirectStandardError=true;
         info.EnvironmentVariables["TEMP"]=temp;info.EnvironmentVariables["TMP"]=temp;
-        travail=new Process {StartInfo=info}; travail.ErrorDataReceived+=delegate(object s,DataReceivedEventArgs e){if(e.Data!=null)erreur+=e.Data+Environment.NewLine;};
-        travail.Start(); travail.BeginErrorReadLine(); debut=DateTime.Now; texte.ReadOnly=true;
+        if(!LancerTravail(info)){lectureProgressive=false;return;}
+        debut=DateTime.Now; texte.ReadOnly=true;
         vitesse.Enabled=false;voix.Enabled=false;
         statut.Text="Préparation de la voix… Arrêter permet d’annuler.";
+    }
+    /// 1.9.1 : lance python sans laisser un processus non demarre (cause de « Aucun processus n'est associe a cet objet »).
+    bool LancerTravail(ProcessStartInfo info) {
+        if(!File.Exists(info.FileName)) {
+            travail=null;
+            statut.Text="Moteur introuvable : dossier « runtime » absent à côté de Piper-Gilles.exe.";
+            MessageBox.Show("Le moteur du lecteur est introuvable :\r\n"+info.FileName+"\r\n\r\nPiper-Gilles.exe doit être dans le dossier qui contient le sous-dossier « runtime » (par exemple D:\\Lecteur-Gilles). "+
+                "Si vous avez décompressé la mise à jour dans un nouveau dossier, copiez son contenu dans le dossier du lecteur et relancez le lecteur avec le raccourci du bureau.","Piper");
+            return false;
+        }
+        var p=new Process {StartInfo=info};
+        p.ErrorDataReceived+=delegate(object s,DataReceivedEventArgs e){if(e.Data!=null)erreur+=e.Data+Environment.NewLine;};
+        try {p.Start();p.BeginErrorReadLine();}
+        catch(Exception e) {p.Dispose();travail=null;statut.Text="Le moteur n'a pas pu démarrer.";MessageBox.Show(e.Message+"\r\n"+info.FileName,"Piper");return false;}
+        travail=p; return true;
     }
     void Importer(string fichier) {
         Arreter(); importation=true; erreur=""; documentOuvert=fichier;
@@ -495,8 +510,8 @@ class Lecteur : Form {
         info.Arguments="\""+Path.Combine(racine,"documents.py")+"\" \""+fichier+"\" \""+Path.Combine(temp,"document.json")+"\""+(nettoyerPdf.Checked?" --clean-pdf":"");
         info.UseShellExecute=false;info.CreateNoWindow=true;info.RedirectStandardError=true;
         info.EnvironmentVariables["TEMP"]=temp;info.EnvironmentVariables["TMP"]=temp;
-        travail=new Process {StartInfo=info};travail.ErrorDataReceived+=delegate(object s,DataReceivedEventArgs e){if(e.Data!=null)erreur+=e.Data+Environment.NewLine;};
-        travail.Start();travail.BeginErrorReadLine();debut=DateTime.Now;texte.ReadOnly=true;
+        if(!LancerTravail(info)){importation=false;return;}
+        debut=DateTime.Now;texte.ReadOnly=true;
         statut.Text="Ouverture du document…";
     }
     void Poll(object sender,EventArgs args) {
