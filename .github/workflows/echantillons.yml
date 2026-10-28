@@ -18,10 +18,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install --quiet piper-tts==1.8.0
+          python -m pip install --quiet piper-tts==1.8.0 librosa soundfile
           mkdir -p voix
           base=https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR
-          for v in tom/medium upmc/medium siwis/medium mls/medium; do
+          for v in tom/medium upmc/medium siwis/medium mls/medium mls_1840/low; do
             n="fr_FR-$(echo $v | tr / -)"
             curl -sSfL "$base/$v/$n.onnx" -o voix/$n.onnx
             curl -sSfL "$base/$v/$n.onnx.json" -o voix/$n.onnx.json
@@ -34,12 +34,13 @@ jobs:
         run: |
           python outils/echantillons.py outils/phrases-essai.json sons voix/fr_FR-gilles-low.onnx voix/fr_FR-tom-medium.onnx voix/fr_FR-siwis-medium.onnx voix/fr_FR-upmc-medium.onnx:pierre voix/fr_FR-upmc-medium.onnx:jessica
           ls -la sons
+          python outils/voix_graves.py outils/phrases-essai.json voix sons
       - name: Ranger les extraits dans la branche (MP3)
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg > /dev/null
           mkdir -p echantillons
           for f in sons/*.wav; do ffmpeg -loglevel error -y -i "$f" -codec:a libmp3lame -q:a 4 "echantillons/$(basename "${f%.wav}").mp3"; done
-          cp voix/*.MODEL_CARD.txt echantillons/
+          cp voix/*.MODEL_CARD.txt sons/*.json echantillons/
           python -c "import json,glob;[print(f, json.load(open(f)).get('speaker_id_map'), json.load(open(f))['audio']) for f in glob.glob('voix/*.json')]" > echantillons/voix.txt
           git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
           git add echantillons && git commit -m "Extraits de voix produits par la CI [skip ci]" && git push
