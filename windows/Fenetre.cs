@@ -98,7 +98,7 @@ class Lecteur : Form {
         outils.Controls.Add(new Label {Text="Voix",AutoSize=true,Margin=new Padding(4,10,10,0)});
         voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;
         // Tom (posé) en premier quand ses fichiers sont installés (version 1.9)
-        if(File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx"))) {voix.Items.Add("Tom (posé)");fichiersVoix.Add("fr_FR-tom-medium");}
+        if(File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx"))&&File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx.json"))) {voix.Items.Add("Tom (posé)");fichiersVoix.Add("fr_FR-tom-medium");}
         voix.Items.Add("Gilles");fichiersVoix.Add("fr_FR-gilles-low");voix.Items.Add("Siwis");fichiersVoix.Add("fr_FR-siwis-medium");
         voix.SelectedIndex=0;outils.Controls.Add(voix);
         outils.Controls.Add(nettoyerPdf);

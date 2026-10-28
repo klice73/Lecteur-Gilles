@@ -2,12 +2,16 @@ LECTEUR GILLES 1.9 POUR WINDOWS : MISE A JOUR
 
 Nouveautes de la 1.9
   - Nouvelle voix « Tom (pose) » : voix d'homme grave, lue un peu plus lentement
-    (12 % plus pose que sa vitesse d'origine). Elle prononce correctement les sons
+    (la lecture dure 12 % plus longtemps qu'a sa vitesse d'origine). Elle prononce correctement les sons
     « an », « on », « in » que Gilles ne sait pas faire.
   - Elle est proposee en premier dans la liste des voix ; Gilles et Siwis restent disponibles.
   - Surlignage mot a mot exact avec Tom, comme avec Gilles. Le lexique de prononciation
     et l'enregistrement WAV fonctionnent aussi avec Tom.
   - Tom est en qualite moyenne a 44 100 Hz : un peu plus de calcul que Gilles.
+  - Licence de la voix Tom : AGPL-3.0, avec une autorisation d'usage de la voix a deux
+    conditions (voir licences\__Tom-CONDITIONS-USAGE.txt et THIRD_PARTY_NOTICES.md) :
+    ne pas presenter la voix comme celle d'une personne reelle ou identifiee, et publier
+    sous AGPL-3.0 tout modele de voix entraine a partir de Tom ou de l'audio qu'il produit.
 
 Nouveautes de la 1.8
   - Bouton « Prononciations… » : lexique de prononciation que vous modifiez vous-meme,

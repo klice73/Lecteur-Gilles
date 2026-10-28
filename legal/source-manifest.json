@@ -166,5 +166,11 @@
     "url": "https://repo1.maven.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0-sources.jar",
     "sha256": "42a5e144b8e81d50d6913d1007b695e62e614705268d8cf9f13dbdc478c2c68e",
     "file": "jetbrains-annotations-13.0.zip"
+  },
+  {
+    "name": "voix-tom-fr_FR-tom-medium",
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-tom-medium.tar.bz2",
+    "sha256": "3d8258ef8466b5d5f2cc46c06e1415d3d01c9cbaeed8b6d5b3d152073672472c",
+    "file": "vits-piper-fr_FR-tom-medium.tar.bz2"
   }
 ]

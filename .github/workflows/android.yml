@@ -47,6 +47,7 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          disk-size: 4096M
           script: |
             adb logcat -c || true
             gradle connectedDebugAndroidTest --no-daemon --console=plain || (adb logcat -d -t 3000 > logcat-echec.txt; exit 1)
@@ -120,7 +121,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.9.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.9.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json legal/licenses/AGPL-3.0.txt legal/licenses/Tom-CONDITIONS-USAGE.txt SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Voix Tom : AGPL-3.0 et conditions d'usage de la voix (AGPL-3.0.txt, Tom-CONDITIONS-USAGE.txt). Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.9.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.9.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -203,6 +204,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
           Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.9.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
+          python legal/prepare_notices.py
+          Copy-Item -Recurse windows\licences paquet\licences
+          Copy-Item THIRD_PARTY_NOTICES.md paquet\
           Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json,windows\voix\fr_FR-tom-medium.onnx,windows\voix\fr_FR-tom-medium.onnx.json paquet\voix\
           Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.9.zip
           gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.9.zip

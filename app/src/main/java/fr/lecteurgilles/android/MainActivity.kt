@@ -242,7 +242,8 @@ class MainActivity : Activity() {
         tools.addView(button("☰ Aller à…") { allerA() }, LinearLayout.LayoutParams(0,dp(56),0.7f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
-        voixChoix = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,voixDisponibles.map{"Voix : "+it.nom});setSelection(getPreferences(MODE_PRIVATE).getInt("voix",0).coerceIn(0,voixDisponibles.size-1)) }
+        voixChoix = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,voixDisponibles.map{"Voix : "+it.nom});val choisie=getPreferences(MODE_PRIVATE).getString("voix-dossier",null);setSelection(voixDisponibles.indexOfFirst{it.dossier==choisie}.coerceAtLeast(0))
+            onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onItemSelected(p:AdapterView<*>?,v:android.view.View?,pos:Int,id:Long){getPreferences(MODE_PRIVATE).edit().putString("voix-dossier",voixDisponibles[pos].dossier).apply()};override fun onNothingSelected(p:AdapterView<*>?){}} }
         val reglages=LinearLayout(this)
         reglages.addView(speed,LinearLayout.LayoutParams(0,-2,1f));reglages.addView(voixChoix,LinearLayout.LayoutParams(0,-2,1f))
         layout.addView(reglages)
@@ -349,7 +350,6 @@ class MainActivity : Activity() {
         val lexique=chargerLexique()
         avecReperes(false){}   // texte collé : chapitres repérés d'après le texte, pour afficher la page et le chapitre en cours
         val v=voixDisponibles[voixChoix.selectedItemPosition.coerceIn(0,voixDisponibles.size-1)]
-        getPreferences(MODE_PRIVATE).edit().putInt("voix",voixChoix.selectedItemPosition).apply()
         val id=generation.incrementAndGet();val rate=listOf(0.8f,1f,1.2f,1.5f)[speed.selectedItemPosition]/v.lenteur
         active=true;paused=false;controls();status.text="Préparation de ${v.nom.substringBefore(' ')}…";window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         worker.execute {
