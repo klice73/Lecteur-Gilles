@@ -1,0 +1,43 @@
+name: Echantillons de voix (comparaison)
+on:
+  push:
+    branches: [echantillons-voix]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  voix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Piper et voix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m pip install --quiet piper-tts==1.8.0
+          mkdir -p voix
+          base=https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR
+          for v in tom/medium upmc/medium siwis/medium mls/medium; do
+            n="fr_FR-$(echo $v | tr / -)"
+            curl -sSfL "$base/$v/$n.onnx" -o voix/$n.onnx
+            curl -sSfL "$base/$v/$n.onnx.json" -o voix/$n.onnx.json
+            curl -sSfL "$base/$v/MODEL_CARD" -o voix/$n.MODEL_CARD.txt || true
+          done
+          gh release download test-23 -p "fr_FR-gilles-low.onnx*" -D voix
+          ls -la voix
+          python -c "import json;[print(f, json.load(open('voix/'+f)).get('speaker_id_map')) for f in ['fr_FR-upmc-medium.onnx.json','fr_FR-mls-medium.onnx.json']]"
+      - name: Lire les phrases
+        run: |
+          python outils/echantillons.py outils/phrases-essai.json sons voix/fr_FR-gilles-low.onnx voix/fr_FR-tom-medium.onnx voix/fr_FR-siwis-medium.onnx voix/fr_FR-upmc-medium.onnx:pierre voix/fr_FR-upmc-medium.onnx:jessica
+          ls -la sons
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echantillons-voix
+          path: |
+            sons/
+            voix/*.MODEL_CARD.txt
+            voix/*.json
