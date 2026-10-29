@@ -242,8 +242,8 @@ class MainActivity : Activity() {
         tools.addView(button("☰ Aller à…") { allerA() }, LinearLayout.LayoutParams(0,dp(56),0.7f))
         layout.addView(tools)
         speed = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Vitesse 0,8×","Vitesse 1×","Vitesse 1,2×","Vitesse 1,5×"));setSelection(1) }
-        voixChoix = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,voixDisponibles.map{"Voix : "+it.nom});val choisie=getPreferences(MODE_PRIVATE).getString("voix-dossier",null);setSelection(voixDisponibles.indexOfFirst{it.dossier==choisie}.coerceAtLeast(0))
-            onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onItemSelected(p:AdapterView<*>?,v:android.view.View?,pos:Int,id:Long){getPreferences(MODE_PRIVATE).edit().putString("voix-dossier",voixDisponibles[pos].dossier).apply()};override fun onNothingSelected(p:AdapterView<*>?){}} }
+        voixChoix = Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,voixDisponibles.map{"Voix : "+it.nom});val choisie=getPreferences(MODE_PRIVATE).getString("voix-dossier-1.10",null);setSelection(voixDisponibles.indexOfFirst{it.dossier==choisie}.coerceAtLeast(0))
+            onItemSelectedListener=object:AdapterView.OnItemSelectedListener{override fun onItemSelected(p:AdapterView<*>?,v:android.view.View?,pos:Int,id:Long){getPreferences(MODE_PRIVATE).edit().putString("voix-dossier-1.10",voixDisponibles[pos].dossier).apply()};override fun onNothingSelected(p:AdapterView<*>?){}} }
         val reglages=LinearLayout(this)
         reglages.addView(speed,LinearLayout.LayoutParams(0,-2,1f));reglages.addView(voixChoix,LinearLayout.LayoutParams(0,-2,1f))
         layout.addView(reglages)
@@ -324,7 +324,7 @@ class MainActivity : Activity() {
         if(files.isEmpty()){target.parentFile?.mkdirs();assets.open(path).use{input->target.outputStream().use{input.copyTo(it)}}}
         else{target.mkdirs();for(name in files)copyAssets("$path/$name",File(target,name))}
     }
-    /** Voix livrées dans l'APK (1.9) : nom affiché, dossier des assets, modèle, marque de copie, lenteur propre. */
+    /** Voix livrées dans l'APK (1.10) : nom affiché, dossier des assets, modèle, marque de copie, lenteur propre. */
     private class Voix(val nom:String,val dossier:String,val modele:String,val marque:String,val lenteur:Float,val variation:Float=0.8f)
     private val voixDisponibles=listOf(
         // 1.10 : Gilles réentraîné (nasales) ; variation des durées 0,4 comme dans son .json (rythme régulier)

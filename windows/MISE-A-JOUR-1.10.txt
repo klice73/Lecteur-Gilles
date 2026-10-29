@@ -1,8 +1,9 @@
 LECTEUR GILLES 1.10 POUR WINDOWS : MISE A JOUR
 
 Nouveautes de la 1.10
-  - « Gilles (nouveau) » : la voix de Gilles reentrainee. Meme voix grave, mais elle prononce
-    maintenant les sons « an », « on », « in », et le son est plus net (22 050 Hz au lieu de 16 000).
+  - « Gilles (nouveau) » : la voix de Gilles reentrainee. Elle connait maintenant les sons
+    « an », « on », « in » (l'ancienne ne les avait pas) et sort en 22 050 Hz au lieu de 16 000.
+    Hauteur de voix mesuree semblable a l'ancien Gilles (environ 90 a 105 Hz).
     Elle est proposee en premier dans la liste des voix.
   - L'ancienne voix reste disponible sous le nom « Gilles (ancien) », ainsi que Tom (pose) et Siwis.
   - Surlignage mot a mot exact avec Gilles (nouveau), lexique et enregistrement WAV compris.
@@ -79,7 +80,7 @@ Installation (environ 1 minute)
        voix\fr_FR-gilles-medium.onnx     (nouveau en 1.10, environ 64 Mo)
        voix\fr_FR-gilles-medium.onnx.json
        voix\fr_FR-tom-medium.onnx        (environ 63 Mo)
-       voix\fr_FR-tom-medium.onnx.json   (nouveau)
+       voix\fr_FR-tom-medium.onnx.json
   4. Relancer le lecteur avec le raccourci du bureau (inchange).
 
 Ou est garde le texte ?

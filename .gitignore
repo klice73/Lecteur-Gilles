@@ -29,3 +29,5 @@ windows/session-avant-test/
 windows/runtime/
 windows/flux/
 windows/req.json
+windows/flux*/
+windows/req*.json
