@@ -38,7 +38,7 @@ vermouths	vErm'ut
 valsons	vals'O~
 toundras	tundr'a
 tergiversons	tErZivErs'O~
-stéthoscopes	stetOsk'op
+stéthoscopes	stetOsk'Op
 simouns	sim'un
 semailles	s@m'aj
 revécut	r@vek'y
@@ -73,4 +73,23 @@ apothicaires	apotik'Er
 améthystes	amet'ist
 améthyste	amet'ist
 berthe	b'Ert
-faucheant	foS'A~
+// ajouts apres audit
+vermouth	vErm'ut
+jury	Zyr'i
+jurys	Zyr'i
+chantilly	SA~tij'i
+wallon	wal'O~
+wallons	wal'O~
+wallonne	wal'On
+wallonnes	wal'On
+prud'homme	pryd'Om
+prud'hommes	pryd'Om
+igloo	igl'u
+atoll	at'Ol
+atolls	at'Ol
+danemark	danm'ark
+alcootest	alkOt'Est
+seing	s'E~
+solder	sOld'e
+scotcher	skOtS'e
+cafter	kaft'e

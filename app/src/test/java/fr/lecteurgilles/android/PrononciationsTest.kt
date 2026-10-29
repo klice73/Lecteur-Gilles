@@ -18,6 +18,7 @@ class PrononciationsTest {
         val vide=Prononciations.lire("")
         assertEquals("Plus qu' hier, qu' histoire, Qu' Hector.",vide.appliquer("Plus qu'hier, qu’histoire, Qu'Hector."))
         assertEquals("jusqu'hier, lorsqu'il, qu'il",vide.appliquer("jusqu'hier, lorsqu'il, qu'il"))
+        assertEquals("quoiqu' habile, Quoiqu' Henri",vide.appliquer("quoiqu'habile, Quoiqu’Henri"))
         assertEquals("d'aujourdhui, D’aujourdhui, aujourd'hui",vide.appliquer("d'aujourd'hui, D’aujourd’hui, aujourd'hui"))
     }
 }

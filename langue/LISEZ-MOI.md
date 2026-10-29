@@ -5,9 +5,12 @@ Le moteur de prononciation (eSpeak NG) passe parfois en anglais au milieu d'un t
 de `fr_rules` qui envoient certaines suites de lettres vers l'anglais.
 
 `fr_dict` est le dictionnaire français d'eSpeak NG **révision 724808c** (celle de Piper 1.8.0), recompilé avec, en plus,
-les 74 mots de `fr_lecteur_gilles.txt` (prononciation française forcée). Rien d'autre ne change : les vrais anglicismes
-(week-end, football, e-mail…) gardent leur prononciation. Contrôle : sur 139 856 mots français courants, seuls ces
-mots (et « dos-d'âne ») changent de prononciation.
+les 92 mots de `fr_lecteur_gilles.txt` (prononciation française forcée). Rien d'autre ne change : les vrais anglicismes
+(week-end, football, e-mail…) gardent leur prononciation. Contrôle sous Windows : sur 139 856 mots français courants,
+seuls ces mots et quelques composés (dos-d'âne, blanc-seing) changent de prononciation.
+Sous Android, ce fichier remplace en plus le dictionnaire plus ancien fourni par Sherpa-ONNX : environ 250 mots de plus
+y étaient lus en anglais (rythme, mythe, menthe, testament, enthousiasme…) et sont désormais lus comme sous Windows
+(mesure de l'audit du 29 octobre 2026).
 
 Liste trouvée en faisant lire 139 856 mots par le moteur et en gardant ceux qui passaient en anglais alors qu'ils sont
 français (accents, terminaisons françaises, fréquence en français bien plus forte qu'en anglais), vérifiés un par un.

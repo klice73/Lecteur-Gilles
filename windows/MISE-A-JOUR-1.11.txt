@@ -2,7 +2,8 @@ LECTEUR GILLES 1.11 POUR WINDOWS : MISE A JOUR
 
 Nouveautes de la 1.11
   - Prononciation corrigee : le moteur lisait certains mots francais « a l'anglaise » (« dos », « traversons »,
-    « mammouth », « methane », « Berthe », « assieds-toi », « qu'hier », « d'aujourd'hui »... 76 cas en tout).
+    « mammouth », « methane », « Berthe », « assieds-toi », « qu'hier », « d'aujourd'hui »... 92 mots et 2 regles).
+  - Limite : une phrase contenant « qu'h... » ou « d'aujourd'hui » a un surlignage mot a mot estime (la phrase reste exacte).
   - Nouveau dossier « espeak-ng-data » (donnees de prononciation, environ 20 Mo) livre avec le lecteur.
   - Votre lexique prononciations.txt reste utile pour les noms propres (il n'est pas remplace).
 

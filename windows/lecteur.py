@@ -254,7 +254,7 @@ def motif_lexique(lexique):
 
 # 1.11 : deux erreurs du moteur de prononciation corrigees pour tous les textes (meme regle dans Prononciations.kt) :
 #  « qu'h... » (qu'hier, qu'histoire) et « d'aujourd'hui » etaient lus a l'anglaise.
-_QU_H = re.compile("(?<![" + _LETTRES + "])(qu)['\u2019](?=h)", re.I)
+_QU_H = re.compile("(?<![" + _LETTRES + "])((?:quoi)?qu)['\u2019](?=h)", re.I)
 _AUJOURDHUI = re.compile("(['\u2019])(aujourd)['\u2019](hui)(?![" + _LETTRES + "])", re.I)
 
 

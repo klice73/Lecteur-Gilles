@@ -35,6 +35,7 @@ print('lexique (audit) : tous les tests reussis')
 moteur = {
     "Plus qu'hier, qu’histoire, Qu'Hector.": "Plus qu' hier, qu' histoire, Qu' Hector.",
     "jusqu'hier, lorsqu'il, qu'il": "jusqu'hier, lorsqu'il, qu'il",
+    "quoiqu'habile, Quoiqu’Henri": "quoiqu' habile, Quoiqu' Henri",
     "d'aujourd'hui, D’aujourd’hui, aujourd'hui": "d'aujourdhui, D’aujourdhui, aujourd'hui",
 }
 for avant, apres in moteur.items():

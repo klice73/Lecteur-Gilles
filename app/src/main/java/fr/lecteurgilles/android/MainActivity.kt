@@ -337,6 +337,8 @@ class MainActivity : Activity() {
         val dir=File(filesDir,v.dossier)
         // changer la marque à chaque nouvelle version d'une voix livrée dans l'APK
         if(!File(dir,v.marque).exists()){dir.deleteRecursively();copyAssets(v.dossier,dir);File(dir,v.marque).writeText("ok")}
+        // 1.11 : dictionnaire français corrigé ; recopié aussi sur un téléphone qui avait déjà la voix
+        File(dir,"fr_dict-1.11").let{m->if(!m.exists()){copyAssets("${v.dossier}/espeak-ng-data/fr_dict",File(dir,"espeak-ng-data/fr_dict"));m.writeText("ok")}}
         voixMoteur=v.dossier
         return OfflineTts(config=OfflineTtsConfig(model=OfflineTtsModelConfig(
             vits=OfflineTtsVitsModelConfig(model=File(dir,v.modele).path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path,noiseScaleW=v.variation),numThreads=2),maxNumSentences=1)).also{engine=it}

@@ -11,7 +11,7 @@ class Prononciations private constructor(private val motif:Regex?,private val ta
     companion object {
         private const val LETTRES="0-9A-Za-z\\u00c0-\\u00d6\\u00d8-\\u00f6\\u00f8-\\u024f"
         // 1.11 : « qu'h... » et « d'aujourd'hui » étaient lus à l'anglaise par le moteur ; même règle que corriger_moteur (lecteur.py)
-        private val QU_H=Regex("(?<![$LETTRES])(qu)['’](?=h)",RegexOption.IGNORE_CASE)
+        private val QU_H=Regex("(?<![$LETTRES])((?:quoi)?qu)['’](?=h)",RegexOption.IGNORE_CASE)
         private val AUJOURDHUI=Regex("(['’])(aujourd)['’](hui)(?![$LETTRES])",RegexOption.IGNORE_CASE)
         fun corrigerMoteur(t:String):String = AUJOURDHUI.replace(QU_H.replace(t,"$1' "),"$1$2$3")
         const val ENTETE="# Lexique de prononciation de Gilles\n# Une ligne par mot :  mot = comment Gilles doit le dire\n"+
