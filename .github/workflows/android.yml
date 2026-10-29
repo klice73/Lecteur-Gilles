@@ -30,7 +30,8 @@ jobs:
           python -m pip install --quiet onnx==1.23.2
           python prepare.py
           python legal/prepare_notices.py
-          python -c "import onnx;m=onnx.load('app/src/main/assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx');assert any(p.key=='lecteur_gilles_plafond_durees' for p in m.metadata_props),'voix non plafonnee';print('Voix plafonnee verifiee')"
+          python -c "import onnx;m=onnx.load('.voix-windows/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx');assert any(p.key=='lecteur_gilles_plafond_durees' for p in m.metadata_props),'voix non plafonnee';print('Ancien Gilles plafonne')"
+          python -c "import onnx;m=onnx.load('app/src/main/assets/vits-piper-fr_FR-gilles-medium/fr_FR-gilles-medium.onnx');d={p.key:p.value for p in m.metadata_props};assert d.get('model_type')=='vits' and d.get('sample_rate')=='22050',d;print('Gilles nouveau pret pour Sherpa',d)"
       - name: Compiler, tester et vérifier Android
         run: |
           gradle assembleDebug testDebugUnitTest lintDebug --no-daemon --console=plain
@@ -95,17 +96,19 @@ jobs:
       - name: Préparer APK installable
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk Lecteur-Gilles-Android.apk
-          # verifier que la voix livree dans l'APK est bien la voix plafonnee
-          unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx > voix-apk.onnx
-          python -c "import onnx;m=onnx.load('voix-apk.onnx');assert any(p.key=='lecteur_gilles_plafond_durees' for p in m.metadata_props),'APK sans voix plafonnee';print('APK : voix plafonnee')"
+          # 1.10 : l'APK contient Gilles nouveau et Tom ; l'ancien Gilles (plafonne) ne sert plus que sous Windows
+          unzip -l Lecteur-Gilles-Android.apk | grep -q 'vits-piper-fr_FR-gilles-medium/fr_FR-gilles-medium.onnx' || (echo "APK sans Gilles nouveau"; exit 1)
+          cp .voix-windows/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx voix-apk.onnx
           # meme voix pour Windows, avec la duree de chaque son exposee (surlignage mot a mot exact)
           python plafonner_voix.py voix-apk.onnx fr_FR-gilles-low.onnx --alignement
-          unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx.json > fr_FR-gilles-low.onnx.json
+          cp .voix-windows/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx.json fr_FR-gilles-low.onnx.json
+          python aligner_voix.py modeles/fr_FR-gilles-medium.onnx fr_FR-gilles-medium.onnx
+          cp modeles/fr_FR-gilles-medium.onnx.json fr_FR-gilles-medium.onnx.json
           # version 1.9 : voix Tom (posee), presente dans l'APK ; pour Windows, duree de chaque son exposee (audio inchange)
           unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-tom-medium/fr_FR-tom-medium.onnx > tom-apk.onnx
           python aligner_voix.py tom-apk.onnx fr_FR-tom-medium.onnx
           unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-tom-medium/fr_FR-tom-medium.onnx.json > fr_FR-tom-medium.onnx.json
-          sha256sum fr_FR-gilles-low.onnx fr_FR-tom-medium.onnx Lecteur-Gilles-Android.apk > SHA256SUMS.txt
+          sha256sum fr_FR-gilles-medium.onnx fr_FR-gilles-low.onnx fr_FR-tom-medium.onnx Lecteur-Gilles-Android.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Lecteur-Gilles-Android
@@ -121,7 +124,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json legal/licenses/AGPL-3.0.txt legal/licenses/Tom-CONDITIONS-USAGE.txt SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Voix Tom : AGPL-3.0 et conditions d'usage de la voix (AGPL-3.0.txt, Tom-CONDITIONS-USAGE.txt). Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.9.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.9.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-medium.onnx fr_FR-gilles-medium.onnx.json fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json legal/licenses/AGPL-3.0.txt legal/licenses/Tom-CONDITIONS-USAGE.txt SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.10 : Gilles réentraîné (« Gilles (nouveau) ») : même voix grave, nasales an, on, in, son plus net (22 kHz) ; voix par défaut. Android : Gilles nouveau et Tom ; Windows : aussi l'ancien Gilles et Siwis. Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Voix Tom : AGPL-3.0 et conditions d'usage de la voix (AGPL-3.0.txt, Tom-CONDITIONS-USAGE.txt). Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.10.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.10.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -156,6 +159,16 @@ jobs:
           $j=Get-Content windows\flux\part-000001.json -Raw | ConvertFrom-Json
           "mots: $($j.mots.Count)  phrases: $($j.phrases.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
           if($j.mots.Count -lt 20 -or $j.exactes -lt 1){throw "minutage incomplet"}
+      - name: Minutage mot à mot avec Gilles nouveau
+        shell: pwsh
+        run: |
+          $req=@{text="Chapitre un.`n`nBonjour, je suis Gilles. Un bon vin blanc, du pain et du jambon. Oui. Fin du test.";speed=1.0;voice="fr_FR-gilles-medium"} | ConvertTo-Json
+          [IO.File]::WriteAllText("$PWD\windows\req-gm.json",$req,(New-Object Text.UTF8Encoding $false))
+          windows\runtime\Scripts\python.exe windows\lecteur.py --stream windows\req-gm.json windows\flux-gm
+          if($LASTEXITCODE -ne 0){throw "lecteur.py (Gilles nouveau) en echec"}
+          $j=Get-Content windows\flux-gm\part-000001.json -Raw | ConvertFrom-Json
+          "Gilles nouveau - mots: $($j.mots.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
+          if($j.mots.Count -lt 15 -or $j.exactes -lt 1){throw "minutage Gilles nouveau incomplet"}
       - name: Minutage mot à mot avec la voix Tom (posé)
         shell: pwsh
         run: |
@@ -203,10 +216,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
-          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.9.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
+          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.10.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
           python legal/prepare_notices.py
           Copy-Item -Recurse windows\licences paquet\licences
           Copy-Item THIRD_PARTY_NOTICES.md paquet\
-          Copy-Item windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json,windows\voix\fr_FR-tom-medium.onnx,windows\voix\fr_FR-tom-medium.onnx.json paquet\voix\
-          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.9.zip
-          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.9.zip
+          Copy-Item windows\voix\fr_FR-gilles-medium.onnx,windows\voix\fr_FR-gilles-medium.onnx.json,windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json,windows\voix\fr_FR-tom-medium.onnx,windows\voix\fr_FR-tom-medium.onnx.json paquet\voix\
+          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.10.zip
+          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.10.zip

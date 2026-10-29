@@ -317,7 +317,7 @@ def synthese_minutee(voice, passage, config, lexique=(None, {})):
 ROOT = Path(__file__).resolve().parent
 VOICE = ROOT / 'voix' / 'fr_FR-siwis-medium.onnx'
 # Voix connues et leur lenteur propre (1.9 : Tom « posé », lecture 12 % plus longue, choisie par l'utilisateur)
-VOIX = {'fr_FR-siwis-medium': 1.0, 'fr_FR-gilles-low': 1.0, 'fr_FR-tom-medium': 1.12}
+VOIX = {'fr_FR-siwis-medium': 1.0, 'fr_FR-gilles-low': 1.0, 'fr_FR-tom-medium': 1.12, 'fr_FR-gilles-medium': 1.0}   # 1.10 : Gilles réentraîné
 os.environ['TCL_LIBRARY'] = str(ROOT / 'tcl' / 'tcl8.6')
 os.environ['TK_LIBRARY'] = str(ROOT / 'tcl' / 'tk8.6')
 

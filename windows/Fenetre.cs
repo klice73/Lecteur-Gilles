@@ -97,9 +97,10 @@ class Lecteur : Form {
         outils.SetFlowBreak(vitesse,true);
         outils.Controls.Add(new Label {Text="Voix",AutoSize=true,Margin=new Padding(4,10,10,0)});
         voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;
-        // Tom (posé) en premier quand ses fichiers sont installés (version 1.9)
+        // 1.10 : Gilles réentraîné (nasales) en premier, puis Tom (posé), quand leurs fichiers sont installés
+        if(File.Exists(Path.Combine(racine,"voix","fr_FR-gilles-medium.onnx"))&&File.Exists(Path.Combine(racine,"voix","fr_FR-gilles-medium.onnx.json"))) {voix.Items.Add("Gilles (nouveau)");fichiersVoix.Add("fr_FR-gilles-medium");}
         if(File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx"))&&File.Exists(Path.Combine(racine,"voix","fr_FR-tom-medium.onnx.json"))) {voix.Items.Add("Tom (posé)");fichiersVoix.Add("fr_FR-tom-medium");}
-        voix.Items.Add("Gilles");fichiersVoix.Add("fr_FR-gilles-low");voix.Items.Add("Siwis");fichiersVoix.Add("fr_FR-siwis-medium");
+        voix.Items.Add("Gilles (ancien)");fichiersVoix.Add("fr_FR-gilles-low");voix.Items.Add("Siwis");fichiersVoix.Add("fr_FR-siwis-medium");
         voix.SelectedIndex=0;outils.Controls.Add(voix);
         outils.Controls.Add(nettoyerPdf);
         texte.Multiline=true; texte.ScrollBars=RichTextBoxScrollBars.Vertical; texte.Dock=DockStyle.Fill; texte.Font=new Font("Segoe UI",14); texte.DetectUrls=false;

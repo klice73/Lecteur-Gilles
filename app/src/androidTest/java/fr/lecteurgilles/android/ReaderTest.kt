@@ -13,9 +13,9 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ReaderTest {
     private fun field(a:MainActivity,name:String):Any? = MainActivity::class.java.getDeclaredField(name).apply{isAccessible=true}.get(a)
-    // 1.9 : index 0 = Tom (posé, voix par défaut), index 1 = Gilles
-    @Test fun gillesAndPauseResume() = verifyReading(false,1)
-    @Test fun tomCursorAndPauseResume() = verifyReading(true,0)
+    // 1.10 : index 0 = Gilles (nouveau, voix par défaut), index 1 = Tom (posé)
+    @Test fun gillesAndPauseResume() = verifyReading(false,0)
+    @Test fun tomCursorAndPauseResume() = verifyReading(true,1)
     private fun verifyReading(fromCursor:Boolean,voix:Int) {
         val prefix="TABLE DES MATIÈRES. Passage à ignorer.\n"
         val body="Bonjour. Je suis Gilles. Ceci est un test de lecture, de pause et de reprise. ".repeat(8)
@@ -35,7 +35,7 @@ class ReaderTest {
                 Thread.sleep(200)
                 scenario.onActivity { a ->position=(field(a,"track") as? AudioTrack)?.playbackHeadPosition?:0 }
             }
-            assertTrue("La voix ${if(voix==0) "Tom" else "Gilles"} n'a pas produit de lecture",position>=3000)
+            assertTrue("La voix ${if(voix==0) "Gilles (nouveau)" else "Tom"} n'a pas produit de lecture",position>=3000)
             // Version 1.5 : le surlignage avance mot à mot pendant la lecture
             val vus=HashSet<Int>()
             val fin=System.currentTimeMillis()+4000

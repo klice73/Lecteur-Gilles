@@ -325,19 +325,21 @@ class MainActivity : Activity() {
         else{target.mkdirs();for(name in files)copyAssets("$path/$name",File(target,name))}
     }
     /** Voix livrées dans l'APK (1.9) : nom affiché, dossier des assets, modèle, marque de copie, lenteur propre. */
-    private class Voix(val nom:String,val dossier:String,val modele:String,val marque:String,val lenteur:Float)
+    private class Voix(val nom:String,val dossier:String,val modele:String,val marque:String,val lenteur:Float,val variation:Float=0.8f)
     private val voixDisponibles=listOf(
-        Voix("Tom (posé)","vits-piper-fr_FR-tom-medium","fr_FR-tom-medium.onnx","ready-tom-1",1.12f),   // lecture 12 % plus longue, choisie par l'utilisateur
-        Voix("Gilles","vits-piper-fr_FR-gilles-low","fr_FR-gilles-low.onnx","ready-voix-plafonnee-1",1f))
+        // 1.10 : Gilles réentraîné (nasales) ; variation des durées 0,4 comme dans son .json (rythme régulier)
+        Voix("Gilles (nouveau)","vits-piper-fr_FR-gilles-medium","fr_FR-gilles-medium.onnx","ready-gilles-medium-1",1f,0.4f),
+        Voix("Tom (posé)","vits-piper-fr_FR-tom-medium","fr_FR-tom-medium.onnx","ready-tom-1",1.12f))   // lecture 12 % plus longue, choisie par l'utilisateur
     private var voixMoteur:String?=null // Access only on worker
     private fun getEngine(v:Voix):OfflineTts {
         engine?.let{if(voixMoteur==v.dossier)return it; it.release(); engine=null}
+        File(filesDir,"vits-piper-fr_FR-gilles-low").let{if(it.exists())it.deleteRecursively()}   // 1.10 : ancien Gilles retiré de l'APK, place libérée
         val dir=File(filesDir,v.dossier)
         // changer la marque à chaque nouvelle version d'une voix livrée dans l'APK
         if(!File(dir,v.marque).exists()){dir.deleteRecursively();copyAssets(v.dossier,dir);File(dir,v.marque).writeText("ok")}
         voixMoteur=v.dossier
         return OfflineTts(config=OfflineTtsConfig(model=OfflineTtsModelConfig(
-            vits=OfflineTtsVitsModelConfig(model=File(dir,v.modele).path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path),numThreads=2),maxNumSentences=1)).also{engine=it}
+            vits=OfflineTtsVitsModelConfig(model=File(dir,v.modele).path,tokens=File(dir,"tokens.txt").path,dataDir=File(dir,"espeak-ng-data").path,noiseScaleW=v.variation),numThreads=2),maxNumSentences=1)).also{engine=it}
     }
     private fun startReading(fromCursor:Boolean=false){
         if(active)return

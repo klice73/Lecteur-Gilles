@@ -4,6 +4,9 @@ local.properties
 .downloads/
 app/libs/
 app/src/main/assets/vits-piper-fr_FR-gilles-low/
+app/src/main/assets/vits-piper-fr_FR-gilles-medium/
+app/src/main/assets/vits-piper-fr_FR-tom-medium/
+.voix-windows/
 *.apk
 *.jks
 *.keystore

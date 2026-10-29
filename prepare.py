@@ -21,9 +21,14 @@ archive=download('https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-mo
 tom=download('https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fr_FR-tom-medium.tar.bz2',ROOT/'.downloads/tom.tar.bz2')
 assets=ROOT/'app/src/main/assets'
 assets.mkdir(parents=True,exist_ok=True)
-for paquet,nom in [(archive,'vits-piper-fr_FR-gilles-low'),(tom,'vits-piper-fr_FR-tom-medium')]:
-    if not (assets/nom).exists():
-        with tarfile.open(paquet) as tar: tar.extractall(assets,filter='data')
+import shutil
+# Version 1.10 : l'ancien Gilles (sans nasales) ne sert plus que sous Windows ; il est préparé hors de l'APK.
+WIN=ROOT/'.voix-windows'
+shutil.rmtree(assets/'vits-piper-fr_FR-gilles-low',ignore_errors=True)
+for paquet,nom,dest in [(archive,'vits-piper-fr_FR-gilles-low',WIN),(tom,'vits-piper-fr_FR-tom-medium',assets)]:
+    if not (dest/nom).exists():
+        dest.mkdir(parents=True,exist_ok=True)
+        with tarfile.open(paquet) as tar: tar.extractall(dest,filter='data')
 lock=ROOT/'downloads.sha256.json'
 actual={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in [aar,archive,tom]}
 if lock.exists():
@@ -34,6 +39,13 @@ else:lock.write_text(json.dumps(actual,indent=2)+'\n')
 import sys
 sys.path.insert(0,str(ROOT))
 from plafonner_voix import plafonner
-modele=assets/'vits-piper-fr_FR-gilles-low'/'fr_FR-gilles-low.onnx'
-print('Voix :',plafonner(str(modele),str(modele)),flush=True)
-print('Gilles, Tom et moteur prêts.',flush=True)
+modele=WIN/'vits-piper-fr_FR-gilles-low'/'fr_FR-gilles-low.onnx'
+print('Ancien Gilles (Windows) :',plafonner(str(modele),str(modele)),flush=True)
+# Version 1.10 : Gilles réentraîné (nasales), voir modeles/LISEZ-MOI.md ; préparé pour Sherpa-ONNX
+from preparer_voix_sherpa import preparer
+GM=assets/'vits-piper-fr_FR-gilles-medium'
+shutil.rmtree(GM,ignore_errors=True)
+print('Gilles nouveau (Android) :',preparer(str(ROOT/'modeles'/'fr_FR-gilles-medium.onnx'),str(ROOT/'modeles'/'fr_FR-gilles-medium.onnx.json'),str(GM)),flush=True)
+shutil.copytree(WIN/'vits-piper-fr_FR-gilles-low'/'espeak-ng-data',GM/'espeak-ng-data')
+shutil.copy(ROOT/'modeles'/'LISEZ-MOI.md',GM/'MODEL_CARD')
+print('Gilles (nouveau), Tom et moteur prêts.',flush=True)
