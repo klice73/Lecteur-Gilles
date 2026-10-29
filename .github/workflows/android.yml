@@ -154,7 +154,7 @@ jobs:
           # 1.11 : donnees de prononciation livrees avec le lecteur, dictionnaire francais corrige (langue/LISEZ-MOI.md)
           Copy-Item -Recurse windows\runtime\Lib\site-packages\piper\espeak-ng-data windows\espeak-ng-data
           Copy-Item -Force langue\fr_dict windows\espeak-ng-data\fr_dict
-          windows\runtime\Scripts\python.exe -c "from piper.phonemize_espeak import EspeakPhonemizer as E;p=''.join(''.join(s) for s in E(r'windows\espeak-ng-data').phonemize('fr','le dos'));print('le dos ->',p);assert p.endswith('dˈo'),p"
+          windows\runtime\Scripts\python.exe -c "from piper.phonemize_espeak import EspeakPhonemizer as E;p=''.join(''.join(s) for s in E(r'windows\espeak-ng-data').phonemize('fr','le dos'));print('le dos ->',ascii(p));assert p.endswith('d\u02c8o'),ascii(p)"
       - name: Minutage mot à mot avec la vraie voix
         shell: pwsh
         run: |
