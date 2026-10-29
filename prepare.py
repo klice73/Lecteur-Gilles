@@ -48,4 +48,7 @@ shutil.rmtree(GM,ignore_errors=True)
 print('Gilles nouveau (Android) :',preparer(str(ROOT/'modeles'/'fr_FR-gilles-medium.onnx'),str(ROOT/'modeles'/'fr_FR-gilles-medium.onnx.json'),str(GM)),flush=True)
 shutil.copytree(WIN/'vits-piper-fr_FR-gilles-low'/'espeak-ng-data',GM/'espeak-ng-data')
 shutil.copy(ROOT/'modeles'/'LISEZ-MOI.md',GM/'MODEL_CARD')
+# Version 1.11 : dictionnaire français corrigé (voir langue/LISEZ-MOI.md) pour les deux voix de l'APK
+for voix in ('vits-piper-fr_FR-gilles-medium','vits-piper-fr_FR-tom-medium'):
+    shutil.copy(ROOT/'langue'/'fr_dict',assets/voix/'espeak-ng-data'/'fr_dict')
 print('Gilles (nouveau), Tom et moteur prêts.',flush=True)

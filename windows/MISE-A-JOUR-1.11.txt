@@ -1,0 +1,106 @@
+LECTEUR GILLES 1.11 POUR WINDOWS : MISE A JOUR
+
+Nouveautes de la 1.11
+  - Prononciation corrigee : le moteur lisait certains mots francais « a l'anglaise » (« dos », « traversons »,
+    « mammouth », « methane », « Berthe », « assieds-toi », « qu'hier », « d'aujourd'hui »... 76 cas en tout).
+  - Nouveau dossier « espeak-ng-data » (donnees de prononciation, environ 20 Mo) livre avec le lecteur.
+  - Votre lexique prononciations.txt reste utile pour les noms propres (il n'est pas remplace).
+
+Nouveautes de la 1.10
+  - « Gilles (nouveau) » : la voix de Gilles reentrainee. Elle connait maintenant les sons
+    « an », « on », « in » (l'ancienne ne les avait pas) et sort en 22 050 Hz au lieu de 16 000.
+    Hauteur de voix mesuree semblable a l'ancien Gilles (environ 90 a 105 Hz).
+    Elle est proposee en premier dans la liste des voix.
+  - L'ancienne voix reste disponible sous le nom « Gilles (ancien) », ainsi que Tom (pose) et Siwis.
+  - Surlignage mot a mot exact avec Gilles (nouveau), lexique et enregistrement WAV compris.
+
+OU INSTALLER (important)
+  Le lecteur est dans le dossier qui contient le sous-dossier « runtime ».
+  Sur votre ordinateur : D:\Lecteur-Gilles\outputs\Lecteur-Piper
+  (c'est ce dossier qu'ouvre le raccourci du bureau). Ne pas decompresser dans D:\Lecteur-Gilles.
+
+Nouveautes de la 1.9
+  - Nouvelle voix « Tom (pose) » : voix d'homme grave, lue un peu plus lentement
+    (la lecture dure 12 % plus longtemps qu'a sa vitesse d'origine). Elle prononce correctement les sons
+    « an », « on », « in » que Gilles ne sait pas faire.
+  - Elle est proposee en premier dans la liste des voix ; Gilles et Siwis restent disponibles.
+  - Surlignage mot a mot exact avec Tom, comme avec Gilles. Le lexique de prononciation
+    et l'enregistrement WAV fonctionnent aussi avec Tom.
+  - Tom est en qualite moyenne a 44 100 Hz : un peu plus de calcul que Gilles.
+  - Licence de la voix Tom : AGPL-3.0, avec une autorisation d'usage de la voix a deux
+    conditions (voir licences\Tom-CONDITIONS-USAGE.txt et THIRD_PARTY_NOTICES.md) :
+    ne pas presenter la voix comme celle d'une personne reelle ou identifiee, et publier
+    sous AGPL-3.0 tout modele de voix entraine a partir de Tom ou de l'audio qu'il produit.
+
+Nouveautes de la 1.8
+  - Bouton « Prononciations… » : lexique de prononciation que vous modifiez vous-meme,
+    une ligne par mot :  mot = comment Gilles doit le dire  (ex. « Bateson = Betsonne »).
+    Selectionnez un mot dans le texte puis « Ajouter la selection » pour l'inscrire.
+    Le texte affiche ne change pas ; seule la voix est corrigee, a la lecture comme
+    dans l'enregistrement WAV. Le lexique est garde dans prononciations.txt, dans le
+    dossier du lecteur ; les mises a jour ne le remplacent pas.
+  - Un mot corrige par le lexique est surligne par estimation (sa phrase reste exacte).
+
+Nouveautes de la 1.7 (livres numeriques)
+  - EPUB, KEPUB, FB2 et FB2.ZIP : ouverture directe.
+  - MOBI, AZW3, RTF et autres formats : installez calibre depuis https://calibre-ebook.com puis ouvrez le livre. Conversion locale temporaire, original conservé. calibre reste un logiciel séparé.
+  - Les livres protégés, KFX et ACSM ne sont pas lus directement. Les scans et BD en images nécessitent un OCR.
+
+Nouveautes de la 1.6
+  - Bouton « ☰ Aller a… » : table des matieres du livre (double-clic sur un titre)
+    et saut a une page precise. La page imprimee est reconnue quand le PDF la donne
+    (« iv », « 12 ») ; sinon on peut taper le rang de la page (1 a N).
+  - Sources de la table : signets du PDF, table d'un EPUB, titres d'un document Word
+    ou OpenDocument, titres Markdown. Sans table, les titres sont reperes d'apres le
+    texte (« Chapitre 3 », « Premiere partie », « Introduction »...).
+  - Pendant la lecture, la ligne d'etat indique la page et le chapitre en cours.
+  - Les documents Word et OpenDocument n'ont pas de pages fixes : celles indiquees
+    viennent des sauts de page enregistres par Word ou LibreOffice (approximatives).
+    Les EPUB et les textes colles n'ont pas de pages : on y va par pourcentage.
+  - Pour profiter des pages et des chapitres d'un livre deja ouvert, rouvrez-le une fois
+    avec « Ouvrir un document ».
+
+Nouveautes de la 1.5
+  - Surlignage mot a mot : la phrase lue est en jaune clair, le mot prononce en jaune fonce.
+  - Le texte et la position de lecture sont conserves a la fermeture du lecteur,
+    pendant une pause, a l'arret, et toutes les 2 secondes environ pendant la lecture
+    (coupure de courant ou fermeture brutale : on perd au plus la phrase en cours).
+    Au prochain demarrage, cliquer sur « ⟲ Reprendre ou j'etais ».
+  - Voix Gilles sans bredouillement (version 1.4) avec, en plus, la duree de chaque son :
+    c'est ce qui permet au surlignage de suivre les mots exactement.
+
+Installation (environ 1 minute)
+  1. Fermer le lecteur Gilles.
+  2. Ouvrir le dossier ou se trouve Piper-Gilles.exe (sur D:).
+     C'est le dossier qui contient aussi le sous-dossier « runtime ».
+     Par prudence, copier Piper-Gilles.exe, lecteur.py, documents.py, ebooks.py et
+     voix\fr_FR-gilles-low.onnx dans un dossier « ancienne-version ».
+     (Le fichier prononciations.txt n'est pas dans ce paquet : votre lexique est garde.)
+  3. Copier le contenu de ce paquet dans ce dossier, en acceptant de remplacer :
+       Piper-Gilles.exe
+       lecteur.py
+       documents.py
+       ebooks.py
+       voix\fr_FR-gilles-low.onnx
+       voix\fr_FR-gilles-low.onnx.json
+       espeak-ng-data\                  (nouveau dossier en 1.11)
+       voix\fr_FR-gilles-medium.onnx     (environ 64 Mo)
+       voix\fr_FR-gilles-medium.onnx.json
+       voix\fr_FR-tom-medium.onnx        (environ 63 Mo)
+       voix\fr_FR-tom-medium.onnx.json
+  4. Relancer le lecteur avec le raccourci du bureau (inchange).
+
+Ou est garde le texte ?
+  Dans le sous-dossier « session » du lecteur (texte.txt et position.txt), sur votre
+  ordinateur seulement. Rien n'est envoye sur Internet. Supprimer ce dossier efface
+  la memoire de lecture.
+
+Limites connues
+  - Avec la voix Siwis, le surlignage des mots est estime (la phrase reste exacte) :
+    le bon mot environ 3 fois sur 4, sinon son voisin.
+  - Les nombres ecrits en chiffres (ex. « 1 250 ») peuvent rendre la phrase estimee
+    plutot qu'exacte : le mot surligne peut alors avoir un mot d'avance ou de retard.
+  - Ne pas relancer prepare_voices.py : il remettrait la voix d'origine (bredouillement).
+
+Verifications faites avant publication : voir verification-minutage.txt et verification-reperes.txt (test sur une
+machine Windows de GitHub, sans carte son : la lecture audio reelle n'y est pas testee).

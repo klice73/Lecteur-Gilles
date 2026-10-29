@@ -31,3 +31,12 @@ try:
 finally:
     L.ROOT = ancien
 print('lexique (audit) : tous les tests reussis')
+# 1.11 : corrections automatiques du moteur (memes cas que PrononciationsTest.kt)
+moteur = {
+    "Plus qu'hier, qu’histoire, Qu'Hector.": "Plus qu' hier, qu' histoire, Qu' Hector.",
+    "jusqu'hier, lorsqu'il, qu'il": "jusqu'hier, lorsqu'il, qu'il",
+    "d'aujourd'hui, D’aujourd’hui, aujourd'hui": "d'aujourdhui, D’aujourdhui, aujourd'hui",
+}
+for avant, apres in moteur.items():
+    assert L.appliquer_lexique(avant, None, {}) == apres, (avant, L.appliquer_lexique(avant, None, {}))
+print('corrections du moteur : reussies')

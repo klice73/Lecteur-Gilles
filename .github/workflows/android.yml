@@ -99,6 +99,7 @@ jobs:
           # 1.10 : l'APK contient Gilles nouveau et Tom ; l'ancien Gilles (plafonne) ne sert plus que sous Windows
           unzip -l Lecteur-Gilles-Android.apk | grep -q 'vits-piper-fr_FR-gilles-medium/fr_FR-gilles-medium.onnx' || (echo "APK sans Gilles nouveau"; exit 1)
           ! unzip -l Lecteur-Gilles-Android.apk | grep -q 'vits-piper-fr_FR-gilles-low' || (echo "ancien Gilles encore dans l'APK"; exit 1)
+          for v in gilles-medium tom-medium; do unzip -p Lecteur-Gilles-Android.apk assets/vits-piper-fr_FR-$v/espeak-ng-data/fr_dict | cmp - langue/fr_dict || (echo "dictionnaire francais non corrige ($v)"; exit 1); done
           cp .voix-windows/vits-piper-fr_FR-gilles-low/fr_FR-gilles-low.onnx voix-apk.onnx
           # meme voix pour Windows, avec la duree de chaque son exposee (surlignage mot a mot exact)
           python plafonner_voix.py voix-apk.onnx fr_FR-gilles-low.onnx --alignement
@@ -125,7 +126,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="test-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-medium.onnx fr_FR-gilles-medium.onnx.json fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json legal/licenses/AGPL-3.0.txt legal/licenses/Tom-CONDITIONS-USAGE.txt SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.10 : Gilles réentraîné (« Gilles (nouveau) ») : nasales an, on, in connues du modèle, sortie 22 kHz ; voix par défaut. Android : Gilles nouveau et Tom ; Windows : aussi l'ancien Gilles et Siwis. Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Voix Tom : AGPL-3.0 et conditions d'usage de la voix (AGPL-3.0.txt, Tom-CONDITIONS-USAGE.txt). Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.10.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.10.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
+          gh release create "$TAG" Lecteur-Gilles-Android.apk fr_FR-gilles-medium.onnx fr_FR-gilles-medium.onnx.json fr_FR-gilles-low.onnx fr_FR-gilles-low.onnx.json fr_FR-tom-medium.onnx fr_FR-tom-medium.onnx.json legal/licenses/AGPL-3.0.txt legal/licenses/Tom-CONDITIONS-USAGE.txt SHA256SUMS.txt Lecteur-Gilles-Sources-preparation.zip android-runtime-dependencies.txt --target "$GITHUB_SHA" --prerelease --title "Lecteur Gilles — test ${GITHUB_RUN_NUMBER}" --notes "Version 1.11 : prononciation corrigée (dos, traversons, méthane, Berthe, qu'hier, d'aujourd'hui et 70 autres mots que le moteur lisait à l'anglaise). Version 1.10 : Gilles réentraîné (« Gilles (nouveau) ») : nasales an, on, in connues du modèle, sortie 22 kHz ; voix par défaut. Android : Gilles nouveau et Tom ; Windows : aussi l'ancien Gilles et Siwis. Version 1.9 : nouvelle voix « Tom (posé) », grave et posée, nasales (an, on, in) correctes ; Gilles reste disponible. Voix Tom : AGPL-3.0 et conditions d'usage de la voix (AGPL-3.0.txt, Tom-CONDITIONS-USAGE.txt). Version 1.8 : lexique de prononciation modifiable (« Prononciations… »). Version 1.7 : EPUB et FictionBook ; conversion de formats supplémentaires via calibre sous Windows.  « ☰ Aller à… » (table des matières et pages du livre), page en cours affichée ; surlignage mot à mot et position de lecture conservée (1.5). Android : installer Lecteur-Gilles-Android.apk. Windows : décompresser Lecteur-Gilles-Windows-1.11.zip dans le dossier du lecteur (voir MISE-A-JOUR-1.11.txt). Compilation, tests unitaires et lint exécutés. À tester sur un téléphone Android 8+. Signature de développement : une mise à jour peut nécessiter de désinstaller une version de test précédente."
 
   windows:
     needs: build
@@ -150,6 +151,9 @@ jobs:
         run: |
           python -m venv windows\runtime
           windows\runtime\Scripts\python.exe -m pip install --quiet -r windows\requirements.txt
+          # 1.11 : donnees de prononciation livrees avec le lecteur, dictionnaire francais corrige (langue/LISEZ-MOI.md)
+          Copy-Item -Recurse windows\runtime\Lib\site-packages\piper\espeak-ng-data windows\espeak-ng-data
+          Copy-Item -Force langue\fr_dict windows\espeak-ng-data\fr_dict
       - name: Minutage mot à mot avec la vraie voix
         shell: pwsh
         run: |
@@ -217,10 +221,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force paquet\voix | Out-Null
-          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.10.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
+          Copy-Item windows\Piper-Gilles.exe,windows\lecteur.py,windows\documents.py,windows\ebooks.py,windows\MISE-A-JOUR-1.11.txt,windows\verification-minutage.txt,windows\verification-reperes.txt paquet\
           python legal/prepare_notices.py
           Copy-Item -Recurse windows\licences paquet\licences
+          Copy-Item -Recurse windows\espeak-ng-data paquet\espeak-ng-data
           Copy-Item THIRD_PARTY_NOTICES.md paquet\
           Copy-Item windows\voix\fr_FR-gilles-medium.onnx,windows\voix\fr_FR-gilles-medium.onnx.json,windows\voix\fr_FR-gilles-low.onnx,windows\voix\fr_FR-gilles-low.onnx.json,windows\voix\fr_FR-tom-medium.onnx,windows\voix\fr_FR-tom-medium.onnx.json paquet\voix\
-          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.10.zip
-          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.10.zip
+          Compress-Archive -Path paquet\* -DestinationPath Lecteur-Gilles-Windows-1.11.zip
+          gh release upload "test-${{ github.run_number }}" Lecteur-Gilles-Windows-1.11.zip

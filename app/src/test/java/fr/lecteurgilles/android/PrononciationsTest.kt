@@ -14,5 +14,10 @@ class PrononciationsTest {
         assertEquals("Bateson",Prononciations.lire("").appliquer("Bateson"))
         // apostrophe typographique et BOM (audit 1.8), comme test_lexique.py
         assertEquals("Fréïré book, Fréïré, Bétsonne",Prononciations.lire("\uFEFFFreire's = Fréïré\nBateson = Bétsonne").appliquer("Freire’s book, Freire's, Bateson"))
+        // 1.11 : corrections automatiques du moteur, mêmes cas que test_lexique.py
+        val vide=Prononciations.lire("")
+        assertEquals("Plus qu' hier, qu' histoire, Qu' Hector.",vide.appliquer("Plus qu'hier, qu’histoire, Qu'Hector."))
+        assertEquals("jusqu'hier, lorsqu'il, qu'il",vide.appliquer("jusqu'hier, lorsqu'il, qu'il"))
+        assertEquals("d'aujourdhui, D’aujourdhui, aujourd'hui",vide.appliquer("d'aujourd'hui, D’aujourd’hui, aujourd'hui"))
     }
 }

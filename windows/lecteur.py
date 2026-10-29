@@ -252,10 +252,20 @@ def motif_lexique(lexique):
     return motif, table
 
 
+# 1.11 : deux erreurs du moteur de prononciation corrigees pour tous les textes (meme regle dans Prononciations.kt) :
+#  « qu'h... » (qu'hier, qu'histoire) et « d'aujourd'hui » etaient lus a l'anglaise.
+_QU_H = re.compile("(?<![" + _LETTRES + "])(qu)['\u2019](?=h)", re.I)
+_AUJOURDHUI = re.compile("(['\u2019])(aujourd)['\u2019](hui)(?![" + _LETTRES + "])", re.I)
+
+
+def corriger_moteur(texte):
+    return _AUJOURDHUI.sub(r'\1\2\3', _QU_H.sub(r"\1' ", texte))
+
+
 def appliquer_lexique(texte, motif, table):
-    if motif is None:
-        return texte
-    return motif.sub(lambda m: table.get(m.group(0).replace('\u2019', "'").lower(), m.group(0)), texte)
+    if motif is not None:
+        texte = motif.sub(lambda m: table.get(m.group(0).replace('\u2019', "'").lower(), m.group(0)), texte)
+    return corriger_moteur(texte)
 
 
 def charger_lexique():
@@ -328,7 +338,12 @@ def synthesize(request, output, streaming=False):
     selected = data.get('voice', 'fr_FR-siwis-medium')
     if selected not in VOIX:
         raise ValueError('Voix non prise en charge')
-    voice = PiperVoice.load(str(ROOT / 'voix' / (selected + '.onnx')))
+    # 1.11 : dictionnaire francais corrige (dossier espeak-ng-data livre avec le lecteur), sinon celui de Piper
+    donnees = ROOT / 'espeak-ng-data'
+    if (donnees / 'fr_dict').exists() and (donnees / 'phontab').exists():
+        voice = PiperVoice.load(str(ROOT / 'voix' / (selected + '.onnx')), espeak_data_dir=str(donnees))
+    else:
+        voice = PiperVoice.load(str(ROOT / 'voix' / (selected + '.onnx')))
     config = SynthesisConfig(length_scale=VOIX[selected] / data['speed'])
     lexique = charger_lexique()
     parts = (p for p in text_parts(data['text']) if p.strip())
