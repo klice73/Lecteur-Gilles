@@ -1,0 +1,83 @@
+cmake version 3.22.1
+cmake: 0
+build: 2
+--- cmake log (fin)
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Looking for pthread.h
+-- Looking for pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- The ASM compiler identification is GNU
+-- Found assembler: /usr/bin/cc
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Found OpenMP_C: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Including CPU backend
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -march=native 
+-- Found CUDAToolkit: /usr/local/cuda/include (found version "12.4.131") 
+-- CUDA Toolkit found
+-- The CUDA compiler identification is NVIDIA 12.4.131
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Using CMAKE_CUDA_ARCHITECTURES=75 CMAKE_CUDA_ARCHITECTURES_NATIVE=
+-- FlashAttention K-V type combinations: f16-f16;q4_0-q4_0;q8_0-q8_0;bf16-bf16
+-- Found NCCL: /usr/lib/x86_64-linux-gnu/libnccl.so  
+-- CUDA host compiler is GNU 11.4.0
+-- Including CUDA backend
+-- ggml version: 0.27.0
+-- ggml commit:  cc5df49a
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/q/build
+--- build log (erreurs)
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuGetErrorString'
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/test-abi-c.dir/build.make:102: test-abi-c] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:398: CMakeFiles/test-abi-c.dir/all] Error 2
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuGetErrorString'
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/qwen-tts.dir/build.make:102: qwen-tts] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:334: CMakeFiles/qwen-tts.dir/all] Error 2
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuGetErrorString'
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/qwen-codec.dir/build.make:102: qwen-codec] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:303: CMakeFiles/qwen-codec.dir/all] Error 2
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuGetErrorString'
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/tts-server.dir/build.make:104: tts-server] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:367: CMakeFiles/tts-server.dir/all] Error 2
+gmake: *** [Makefile:136: all] Error 2
+--- build log (fin)
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/qwen-codec.dir/build.make:102: qwen-codec] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:303: CMakeFiles/qwen-codec.dir/all] Error 2
+[100%] Linking CXX executable tts-server
+/usr/bin/ld: warning: libcuda.so.1, needed by libggml-cuda.so.0.27.0, not found (try using -rpath or -rpath-link)
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemCreate'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemAddressReserve'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemUnmap'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemSetAccess'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuDeviceGet'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemAddressFree'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuGetErrorString'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuDeviceGetAttribute'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemMap'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemRelease'
+/usr/bin/ld: libggml-cuda.so.0.27.0: undefined reference to `cuMemGetAllocationGranularity'
+collect2: error: ld returned 1 exit status
+gmake[2]: *** [CMakeFiles/tts-server.dir/build.make:104: tts-server] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:367: CMakeFiles/tts-server.dir/all] Error 2
+gmake: *** [Makefile:136: all] Error 2
