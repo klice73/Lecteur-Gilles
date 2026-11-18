@@ -29,21 +29,26 @@ jobs:
           ls -la /tmp/voix
           mv freeman.txt reference.txt; mv freeman.spk reference.spk; mv freeman.rvq reference.rvq
           mv qwen-talker-0.6b-base-Q8_0.gguf Hubert-essai.gguf; mv qwen-tokenizer-12hz-Q8_0.gguf codec-Q8.gguf
-      - name: Livre audio d'essai (2 passages par chapitre, 3 chapitres)
+      - name: Livre audio d'essai (comme Kaggle : 2 tranches, coupure puis reprise par blocs)
         run: |
-          mkdir -p resultats
-          python - <<'PY'
-          import zipfile, shutil
-          src='windows/tests/document.docx'; shutil.copy(src,'/tmp/livre-essai.docx')
-          PY
-          python entrainement/livre-audio/moteur_livre.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix \
-            --livre /tmp/livre-essai.docx --sortie /tmp/sortie --documents windows/documents.py --premiers 2 --heures 1 2>&1 | tee resultats/essai.txt
-          ls -la /tmp/sortie | tee -a resultats/essai.txt
-          tail -20 /tmp/sortie/journal-moteur.txt >> resultats/essai.txt || true
-          # reprise : la 2e execution ne doit rien refaire
-          python entrainement/livre-audio/moteur_livre.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix \
-            --livre /tmp/livre-essai.docx --sortie /tmp/sortie2 --reprise /tmp/sortie --documents windows/documents.py --premiers 2 2>&1 | tee -a resultats/essai.txt
-          cp "$(ls /tmp/sortie/*.mp3 | head -1)" resultats/premier-chapitre.mp3 || true
+          mkdir -p resultats /tmp/docs && cp windows/documents.py windows/ebooks.py /tmp/docs/
+          cp windows/tests/livre.pdf /tmp/livre-essai.pdf
+          M="python entrainement/livre-audio/moteur_livre.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix --livre /tmp/livre-essai.pdf --documents /tmp/docs/documents.py --premiers 3 --bloc 1"
+          echo "== seance 1 : coupee apres le premier bloc" | tee resultats/essai.txt
+          $M --sortie /tmp/s1 --tranche 0/2 --heures 0.001 2>&1 | tee -a resultats/essai.txt
+          ls -R /tmp/s1 | tee -a resultats/essai.txt
+          echo "== seance 2 : reprise, 2 tranches en parallele" | tee -a resultats/essai.txt
+          $M --sortie /tmp/s2 --reprise /tmp/s1 --tranche 0/2 > /tmp/t0.txt 2>&1 &
+          $M --sortie /tmp/s2 --reprise /tmp/s1 --tranche 1/2 > /tmp/t1.txt 2>&1; wait
+          cat /tmp/t0.txt /tmp/t1.txt | tee -a resultats/essai.txt
+          ls -R /tmp/s2 | tee -a resultats/essai.txt
+          echo "== seance 3 : tout deja fait ; autre livre en entree ignore" | tee -a resultats/essai.txt
+          mkdir -p /tmp/autre && cp /tmp/s2/*.mp3 /tmp/autre/ && echo '{"signature":"autre"}' > /tmp/autre/etat.json
+          $M --sortie /tmp/s3 --reprise /tmp/s2 --tranche 0/1 2>&1 | tee -a resultats/essai.txt
+          n=$(ls /tmp/s2/*.mp3 | wc -l); echo "MP3 seance 2 : $n (attendu 3)" | tee -a resultats/essai.txt
+          grep -q "reprise depuis 1 dossier" /tmp/t0.txt && grep -c "DEJA FAIT" resultats/essai.txt
+          test "$n" = 3
+          cp "$(ls /tmp/s2/*.mp3 | head -1)" resultats/premier-chapitre.mp3
       - name: Rapporter
         if: always()
         run: |

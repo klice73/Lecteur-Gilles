@@ -61,6 +61,16 @@ def passages(texte, limite=420):
 def u16_vers_index(texte, pos):
     return len(texte.encode('utf-16-le')[:2 * pos].decode('utf-16-le', errors='ignore'))
 
+def decouper_long(titre, contenu, maxc=40000):
+    """Chapitre trop long (plus de ~45 min) : parties coupees entre deux paragraphes."""
+    if len(contenu) <= maxc: return [(titre, contenu)]
+    paras = re.split(r'(\n\s*\n|\n)', contenu); parts = []; cur = ''
+    for p in paras:
+        if len(cur) + len(p) > maxc and cur.strip(): parts.append(cur); cur = ''
+        cur += p
+    if cur.strip(): parts.append(cur)
+    return [('%s (partie %d)' % (titre, k), c) for k, c in enumerate(parts, 1)]
+
 def chapitres(fichier, documents_py):
     sys.path.insert(0, str(Path(documents_py).parent))
     import documents
@@ -71,9 +81,27 @@ def chapitres(fichier, documents_py):
         hauts = [e for e in table if e[1] == niveau]
         bornes = [u16_vers_index(texte, e[2]) for e in hauts] + [len(texte)]
         res = [(hauts[i][0], texte[bornes[i]:bornes[i+1]]) for i in range(len(hauts))]
+        if bornes[0] > 0 and texte[:bornes[0]].strip(): res.insert(0, ('Debut', texte[:bornes[0]]))
     else:
         res = [(Path(fichier).stem, texte)]
-    return [(t, c) for t, c in res if c.strip()]
+    out = []
+    for t, c in res:
+        if c.strip(): out += decouper_long(t, c)
+    return out
+
+def signature(fichier):
+    import hashlib
+    return hashlib.sha1(Path(fichier).read_bytes()).hexdigest()[:16]
+
+def dossiers_du_meme_livre(racine, sig):
+    """Dossiers de sortie precedents (etat.json) qui portent la signature de ce livre."""
+    res = []
+    if not racine: return res
+    for e in Path(racine).rglob('etat.json'):
+        try:
+            if json.loads(e.read_text(encoding='utf-8')).get('signature') == sig: res.append(e.parent)
+        except Exception: pass
+    return res
 
 def nom_fichier(i, titre):
     titre = titre.replace('œ', 'oe').replace('Œ', 'Oe').replace('æ', 'ae').replace('Æ', 'Ae')
@@ -117,9 +145,12 @@ def main():
     a.add_argument('--documents', required=True); a.add_argument('--reprise', default='')
     a.add_argument('--lexique', default=''); a.add_argument('--heures', type=float, default=10.0)
     a.add_argument('--device', default=''); a.add_argument('--modele', default='')
+    a.add_argument('--tranche', default='0/1', help='k/n : ne traiter que les chapitres i avec (i-1) %% n == k (une carte graphique par tranche)')
+    a.add_argument('--bloc', type=int, default=40, help='passages par bloc sauvegarde')
     a.add_argument('--premiers', type=int, default=0, help='essai : nombre de passages par chapitre (0 = tout)')
     o = a.parse_args()
     t0 = time.time(); budget = o.heures * 3600
+    k, n = (int(x) for x in o.tranche.split('/'))
     d = Path(o.dossier_voix)
     cfg = {}
     try: cfg = json.loads((d / 'config.json').read_text(encoding='utf-8'))
@@ -134,33 +165,60 @@ def main():
             'codec': trouve('codec', ['codec*.gguf', '*tokenizer*.gguf']),
             'spk': trouve('spk', ['*.spk']), 'rvq': trouve('rvq', ['*.rvq']), 'ref': trouve('reference', ['reference.txt', '*.txt']),
             'chunk': cfg.get('codec_chunk_seconds', 4)}
-    print('Voix :', json.dumps({k: Path(v).name if isinstance(v, str) else v for k, v in voix.items()}), flush=True)
+    print('Voix :', json.dumps({kk: Path(v).name if isinstance(v, str) else v for kk, v in voix.items()}), flush=True)
     sortie = Path(o.sortie); sortie.mkdir(parents=True, exist_ok=True)
-    livre = Path(o.livre).stem
+    parties = sortie / 'parties'; parties.mkdir(exist_ok=True)
+    livre = Path(o.livre).stem; sig = signature(o.livre)
     caps = chapitres(o.livre, o.documents)
     lex = lexique(o.lexique)
-    print('%d chapitres dans « %s »' % (len(caps), livre), flush=True)
-    faits = 0; secondes_audio = 0.0
+    anciens = [x for x in dossiers_du_meme_livre(o.reprise, sig) if x.resolve() != sortie.resolve()]
+    (sortie / 'etat.json').write_text(json.dumps({'signature': sig, 'livre': Path(o.livre).name, 'chapitres': len(caps)}), encoding='utf-8')
+    print('%d chapitres dans « %s » ; tranche %d/%d ; reprise depuis %d dossier(s)' % (len(caps), livre, k, n, len(anciens)), flush=True)
+    journal = str(sortie / ('journal-moteur-%d.txt' % k))
+    faits = 0; echecs = []; durees_bloc = []; arret = False
     for i, (titre, contenu) in enumerate(caps, 1):
+        if (i - 1) % n != k: continue
         cible = sortie / (nom_fichier(i, titre) + '.mp3')
-        if not cible.exists() and o.reprise:
-            anc = list(Path(o.reprise).rglob(cible.name))
-            if anc: shutil.copy2(anc[0], cible)
+        for anc in anciens:
+            if not cible.exists() and (anc / cible.name).is_file(): shutil.copy2(anc / cible.name, cible)
         if cible.exists():
             print('DEJA FAIT', cible.name, flush=True); faits += 1; continue
-        if time.time() - t0 > budget:
-            print('ARRET temps alloue ecoule ; relancez avec la sortie en entree pour continuer', flush=True); break
-        lignes = [a_dire(p, lex) for p in passages(contenu)]
-        lignes = [l for l in lignes if re.search(r'\w', l)]
-        if o.premiers: lignes = lignes[:o.premiers]
-        debut = time.time()
-        pcm = gain(synthese(o.qwen, voix, lignes, o.device, str(sortie / 'journal-moteur.txt')))
-        mp3(pcm, cible, titre, livre, i)
-        duree = len(pcm) / 2 / 24000; secondes_audio += duree; faits += 1
-        print('FAIT %s : %d passages, %.1f min d audio en %.1f min (x%.2f temps reel), seance %.1f h' % (
-            cible.name, len(lignes), duree / 60, (time.time() - debut) / 60, duree / max(1, time.time() - debut), (time.time() - t0) / 3600), flush=True)
-    (sortie / 'etat.json').write_text(json.dumps({'chapitres': len(caps), 'faits': faits}), encoding='utf-8')
-    print('BILAN : %d chapitres sur %d' % (faits, len(caps)), flush=True)
+        try:
+            lignes = [a_dire(p, lex) for p in passages(contenu)]
+            lignes = [l for l in lignes if re.search(r'\w', l)]
+            if o.premiers: lignes = lignes[:o.premiers]
+            blocs = [lignes[j:j + o.bloc] for j in range(0, len(lignes), o.bloc)]
+            morceaux = []
+            for b, lb in enumerate(blocs):
+                f = parties / ('%03d-%03d.pcm' % (i, b))
+                for anc in anciens:
+                    if not f.exists() and (anc / 'parties' / f.name).is_file(): shutil.copy2(anc / 'parties' / f.name, f)
+                if not f.exists():
+                    reste = budget - (time.time() - t0)
+                    prevu = 1.3 * max(durees_bloc) if durees_bloc else 0
+                    if reste <= 0 or prevu > reste:
+                        arret = True; break
+                    debut = time.time()
+                    pcm = synthese(o.qwen, voix, lb, o.device, journal)
+                    tmp = f.with_suffix('.tmp'); tmp.write_bytes(pcm); os.replace(tmp, f)
+                    durees_bloc.append(time.time() - debut)
+                    print('  bloc %d/%d du chapitre %d : %.1f min d audio en %.1f min' % (
+                        b + 1, len(blocs), i, len(pcm) / 48000 / 60, durees_bloc[-1] / 60), flush=True)
+                morceaux.append(f)
+            if arret:
+                print('ARRET temps alloue presque ecoule (chapitre %d en cours, deja sauvegarde) ; relancez avec la sortie en entree' % i, flush=True)
+                break
+            pcm = gain(b''.join(m.read_bytes() for m in morceaux))
+            mp3(pcm, cible, titre, livre, i)
+            for m in morceaux: m.unlink()
+            faits += 1
+            print('FAIT %s : %.1f min d audio, seance %.1f h' % (cible.name, len(pcm) / 48000 / 60, (time.time() - t0) / 3600), flush=True)
+        except Exception as e:
+            echecs.append(cible.name); print('ECHEC %s : %s' % (cible.name, e), flush=True)
+    mien = [i for i in range(1, len(caps) + 1) if (i - 1) % n == k]
+    (sortie / ('bilan-%d.json' % k)).write_text(json.dumps({'chapitres': len(mien), 'faits': faits, 'echecs': echecs}), encoding='utf-8')
+    print('BILAN tranche %d : %d chapitres sur %d%s' % (k, faits, len(mien), ('  !!! ECHECS : ' + ', '.join(echecs)) if echecs else ''), flush=True)
+    sys.exit(1 if echecs else 0)
 
 if __name__ == '__main__':
     main()
