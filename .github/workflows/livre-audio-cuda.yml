@@ -1,0 +1,21 @@
+name: livre-audio-cuda
+on:
+  push:
+    branches: [livre-audio]
+    paths: ['.github/workflows/livre-audio-cuda.yml']
+permissions:
+  contents: write
+jobs:
+  cuda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container: nvidia/cuda:12.4.1-devel-ubuntu22.04
+    steps:
+      - name: Compiler qwentts.cpp 5916bf7 avec CUDA (sm_75 comme la T4 de Kaggle)
+        run: |
+          apt-get -qq update && apt-get -qq install -y git cmake build-essential > /dev/null
+          git clone -q --recurse-submodules https://github.com/ServeurpersoCom/qwentts.cpp /tmp/q
+          cd /tmp/q && git checkout -q 5916bf7 && git submodule update -q --init --recursive
+          mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 > /tmp/c.log 2>&1 || (tail -30 /tmp/c.log; exit 1)
+          cmake --build . -j 4 > /tmp/b.log 2>&1 || (tail -40 /tmp/b.log; exit 1)
+          ls -la qwen-tts && ldd qwen-tts | grep -i cuda | head -3
