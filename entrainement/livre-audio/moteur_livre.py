@@ -109,10 +109,10 @@ def nom_fichier(i, titre):
     s = re.sub(r'\s+', ' ', re.sub(r'[^A-Za-z0-9 _-]+', ' ', s)).strip()[:60] or 'chapitre'
     return '%03d - %s' % (i, s)
 
-def synthese_morceaux(qwen, voix, lignes, device, journal):
+def synthese_morceaux(qwen, voix, lignes, device, journal, seed=42):
     cmd = [qwen, '--model', voix['model'], '--codec', voix['codec'], '--lang', 'French',
            '--ref-spk', voix['spk'], '--ref-rvq', voix['rvq'], '--ref-text', voix['ref'],
-           '--seed', '42', '--codec-chunk-dur', str(voix.get('chunk', 4)), '--max-new', '2048',
+           '--seed', str(seed), '--codec-chunk-dur', str(voix.get('chunk', 4)), '--max-new', '2048',
            '--stream-by-line', '-o', '-']
     if device: cmd[1:1] = ['--device', device]
     entree = ('\n'.join(lignes) + '\n').encode('utf-8')

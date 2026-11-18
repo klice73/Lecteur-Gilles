@@ -15,7 +15,8 @@ def choisir_phrases(transcript, nombre, graine=7):
         if len(c) < 2: continue
         t = (c[2] if len(c) >= 3 and c[2].strip() else c[1]).strip()
         t = re.sub(r'\s+', ' ', t.replace('«', '').replace('»', '').replace('_', ' ')).strip()
-        if not 25 <= len(t) <= 220 or not re.search(r'[a-zà-ÿ]', t) or re.search(r'[0-9<>{}\[\]#@*=]', t): continue
+        if not 25 <= len(t) <= 180 or not re.search(r'[a-zà-ÿ]', t) or re.search(r'[0-9<>{}\[\]#@*=]', t): continue
+        if re.search(r'\b(M|Mme|Mlle|MM|Mgr|Dr|St|Ste|etc)\.|\b[IVXLC]{2,}\b|\b[A-Z]{2,}\b', t): continue   # abreviations, chiffres romains, sigles
         if t.lower() in vues: continue
         vues.add(t.lower()); res.append(t)
     random.Random(graine).shuffle(res)
@@ -27,12 +28,23 @@ def rogner(a, seuil=300, marge=2400):
     if len(fort) == 0: return a[:0]
     return a[max(0, fort[0] - marge):fort[-1] + marge]
 
+def plus_long_silence(a, seuil=300, fen=480):
+    import numpy as np
+    n = len(a) // fen
+    if n == 0: return 0.0
+    rms = np.sqrt((a[:n * fen].astype('float64').reshape(n, fen) ** 2).mean(axis=1))
+    plus, cur = 0, 0
+    for calme in rms < seuil:
+        cur = cur + 1 if calme else 0; plus = max(plus, cur)
+    return plus * fen / 24000
+
 def ecrire_wav(pcm24, cible):
     import numpy as np
     a = rogner(np.frombuffer(pcm24, dtype='<i2'))
+    if plus_long_silence(a) > 0.8: return -1.0          # longue pause au milieu de la phrase
     tmp = str(cible) + '.part.wav'
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', 'pipe:0',
-                    '-af', 'aresample=22050:resampler=soxr', '-c:a', 'pcm_s16le', tmp], input=a.tobytes(), check=True)
+                    '-af', 'aresample=22050:resampler=soxr', '-map_metadata', '-1', '-fflags', '+bitexact', '-c:a', 'pcm_s16le', tmp], input=a.tobytes(), check=True)
     os.replace(tmp, cible)
     return len(a) / 24000
 
@@ -52,7 +64,11 @@ def reprendre(reprise, sortie):
                         if (anc / nom).is_file() and not (sortie / nom).exists(): shutil.copy2(anc / nom, sortie / nom)
                 for f in list(anc.glob('*metadata-*.csv')) + list(anc.glob('*rejets-*.txt')):
                     cible = sortie / ('ancien-' + f.name if not f.name.startswith('ancien-') else f.name)
-                    with open(cible, 'a', encoding='utf-8') as out: out.write(f.read_text(encoding='utf-8'))
+                    lignes = {}
+                    for src in ([cible] if cible.exists() else []) + [f]:
+                        for l in src.read_text(encoding='utf-8').splitlines():
+                            if l.strip(): lignes.setdefault(l.split('|', 1)[0], l)
+                    cible.write_text(''.join(l + '\n' for l in lignes.values()), encoding='utf-8')
 
 def main():
     a = argparse.ArgumentParser()
@@ -60,7 +76,8 @@ def main():
     a.add_argument('--transcript', required=True); a.add_argument('--sortie', required=True)
     a.add_argument('--reprise', default=''); a.add_argument('--nombre', type=int, default=4000)
     a.add_argument('--heures', type=float, default=10.0); a.add_argument('--device', default='')
-    a.add_argument('--tranche', default='0/1'); a.add_argument('--bloc', type=int, default=20)
+    a.add_argument('--tranche', default='0/1'); a.add_argument('--bloc', type=int, default=50)
+    a.add_argument('--seed', type=int, default=42)
     a.add_argument('--modele', default='')
     a.add_argument('--reprise-seule', action='store_true', help='seulement recopier les seances precedentes (a faire une fois, avant les tranches)')
     o = a.parse_args()
@@ -92,16 +109,20 @@ def main():
             print('ARRET temps alloue presque ecoule ; relancez avec la sortie en entree pour continuer', flush=True); break
         debut = time.time()
         try:
-            sons = synthese_morceaux(o.qwen, voix, [t for _, t in bloc], o.device, journal)
+            sons = synthese_morceaux(o.qwen, voix, [t for _, t in bloc], o.device, journal, o.seed)
         except Exception as e:
-            print('ECHEC bloc', bloc[0][0], e, flush=True)
-            for i, t in bloc: rej.write('wavs/hubert_%05d.wav|echec\n' % i)
-            rej.flush(); continue
+            print('bloc %d en echec (%s) : reprise phrase par phrase' % (bloc[0][0], e), flush=True)
+            sons = []
+            for i, t in bloc:
+                try: sons.append(synthese_morceaux(o.qwen, voix, [t], o.device, journal, o.seed)[0])
+                except Exception: sons.append(None)
         for (i, t), pcm in zip(bloc, sons):
             nom = 'wavs/hubert_%05d.wav' % i
+            if pcm is None:
+                rej.write('%s|echec du moteur\n' % nom); rejetees += 1; continue
             d = ecrire_wav(gain(pcm), sortie / nom)
             vitesse = len(t) / d if d > 0 else 0
-            if not (0.8 <= d <= 20.0 and 7.0 <= vitesse <= 25.0):   # phrase avalee, repetee ou bloquee
+            if not (0.8 <= d <= 15.0 and 7.0 <= vitesse <= 25.0):   # phrase avalee, repetee, bloquee ou longue pause
                 (sortie / nom).unlink(missing_ok=True); rej.write('%s|%.1f s|%.1f car/s\n' % (nom, d, vitesse)); rejetees += 1
                 continue
             meta.write('%s|%s\n' % (nom, t)); gardees += 1; audio += d

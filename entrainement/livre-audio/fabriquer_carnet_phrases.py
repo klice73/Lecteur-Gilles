@@ -24,6 +24,8 @@ une voix **légère** qui lit en direct sur le PC et le téléphone, comme Gille
 **Séance suivante (si tout n'est pas fini) :** ajoutez aussi en entrée la **dernière version de ce carnet**
 (Your Work → Notebooks) : les phrases déjà lues sont reprises.
 
+**Gardez ce carnet en Private** : les enregistrements produits sont la voix clonée.
+
 **Résultat :** onglet **Output** : dossier `hubert-phrases` (les enregistrements) et `ecoute-1.wav` à `ecoute-5.wav`
 pour écouter quelques phrases.
 """)
@@ -52,6 +54,7 @@ assert voix, "Voix introuvable : ajoutez en entree votre jeu de donnees prive hu
 VOIX = os.path.dirname(voix[0])
 trans = [p for p in tous if os.path.basename(p) == 'transcript.txt']
 assert trans, "Liste des phrases introuvable : Add Input, chercher « french single speaker speech dataset » (bryanpark)"
+print('Exemples de lignes de la liste :'); print(''.join(open(trans[0], encoding='utf-8').readlines()[:5]))
 SORTIE = '/kaggle/working/hubert-phrases'
 base = [sys.executable, '/kaggle/tmp/moteur_phrases.py', '--qwen', '/kaggle/tmp/qwentts/build/qwen-tts', '--dossier-voix', VOIX,
         '--transcript', trans[0], '--sortie', SORTIE, '--nombre', str(NOMBRE)] + (['--modele', MODELE] if MODELE else [])
@@ -70,15 +73,19 @@ print('codes', [p.wait() for p in procs])
 """)
 md("## 5. Bilan et quelques phrases à écouter")
 code("""
-import glob, os, shutil, subprocess
+import glob, os, shutil, wave
 S = '/kaggle/working/hubert-phrases'
 gardees = {}
-for f in glob.glob(S + '/*metadata-*.csv'):
+for f in sorted(glob.glob(S + '/*metadata-*.csv')):
     for l in open(f, encoding='utf-8'):
-        if '|' in l and os.path.isfile(os.path.join(S, l.split('|', 1)[0])): gardees[l.split('|', 1)[0]] = l.split('|', 1)[1].strip()
-rejets = sum(1 for f in glob.glob(S + '/*rejets-*.txt') for l in open(f, encoding='utf-8') if l.strip())
-duree = sum(os.path.getsize(os.path.join(S, n)) - 44 for n in gardees) / 2 / 22050 / 3600
-print('%d phrases gardées (%.1f h d enregistrement), %d rejetées' % (len(gardees), duree, rejets))
+        if '|' in l and os.path.isfile(os.path.join(S, l.split('|', 1)[0])): gardees.setdefault(l.split('|', 1)[0], l.split('|', 1)[1].strip())
+rejets = {l.split('|', 1)[0] for f in glob.glob(S + '/*rejets-*.txt') for l in open(f, encoding='utf-8') if l.strip()} - set(gardees)
+def duree(n):
+    with wave.open(os.path.join(S, n)) as w: return w.getnframes() / w.getframerate()
+total = sum(duree(n) for n in gardees) / 3600
+with open(S + '/metadata.csv', 'w', encoding='utf-8') as f:
+    for n in sorted(gardees): f.write(n + '|' + gardees[n] + '\\n')
+print('%d phrases gardées (%.1f h d enregistrement), %d rejetées ; liste finale : hubert-phrases/metadata.csv' % (len(gardees), total, len(rejets)))
 for k, n in enumerate(sorted(gardees)[:5], 1):
     shutil.copy(os.path.join(S, n), '/kaggle/working/ecoute-%d.wav' % k); print('ecoute-%d.wav :' % k, gardees[n])
 """)
