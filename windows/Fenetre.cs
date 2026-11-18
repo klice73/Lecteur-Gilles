@@ -55,6 +55,7 @@ class Lecteur : Form {
         statut.Text="Lecture en cours. Ⅱ Pause suspend la voix ; ▶ Continuer la reprend.";
     }
     void Continuer() {
+        if(suspendu && audioOuvert && vitesseEnAttente) {vitesseEnAttente=false;suspendu=false;lire.Text="▶ Lire tout";pause.Enabled=true;RelancerAVitesse();return;}
         if(suspendu && audioOuvert) {Audio("resume "+alias);suspendu=false;lire.Text="▶ Lire tout";pause.Enabled=true;statut.Text="Lecture reprise.";}
         else if(audioOuvert && Audio("status "+alias+" mode")=="playing")return;
         else if(travail==null)Demarrer(false);
@@ -92,9 +93,16 @@ class Lecteur : Form {
         Ajouter(outils,"Ouvrir un document",delegate { using(var d=new OpenFileDialog {Filter=Formats}) if(d.ShowDialog()==DialogResult.OK) Importer(d.FileName); });
         Ajouter(outils,"☰ Aller à…",delegate { DialogueAllerA(); });
         outils.Controls.Add(new Label { Text="Vitesse", AutoSize=true, Margin=new Padding(16,12,4,0) });
-        vitesse.DropDownStyle=ComboBoxStyle.DropDownList; vitesse.Width=75;
-        vitesse.Items.AddRange(new object[]{"0.75","0.9","1.0","1.1","1.25","1.5"}); vitesse.SelectedIndex=2; outils.Controls.Add(vitesse);
-        outils.SetFlowBreak(vitesse,true);
+        // 1.12 : vitesse plus fine (0,60 à 2,00), boutons − et +, changement pendant la lecture, vitesse retenue
+        var plusLent=new Button {Text="−",Width=34,Height=30,Margin=new Padding(0,6,2,0)};
+        vitesse.DropDownStyle=ComboBoxStyle.DropDownList; vitesse.Width=80;
+        vitesse.Items.AddRange(Vitesses); vitesse.SelectedIndex=Array.IndexOf(Vitesses,"1,00 ×");
+        var plusVite=new Button {Text="+",Width=34,Height=30,Margin=new Padding(2,6,0,0)};
+        plusLent.Click+=delegate {ChangerVitesse(-1);}; plusVite.Click+=delegate {ChangerVitesse(1);};
+        var bulle=new ToolTip();bulle.SetToolTip(plusLent,"Plus lent (Ctrl + −)");bulle.SetToolTip(plusVite,"Plus vite (Ctrl + +)");
+        bulle.SetToolTip(vitesse,"Vitesse de la voix. Elle change pendant la lecture, à la phrase en cours.");
+        outils.Controls.Add(plusLent); outils.Controls.Add(vitesse); outils.Controls.Add(plusVite);
+        outils.SetFlowBreak(plusVite,true);
         outils.Controls.Add(new Label {Text="Voix",AutoSize=true,Margin=new Padding(4,10,10,0)});
         voix.DropDownStyle=ComboBoxStyle.DropDownList;voix.Width=180;
         // 1.10 : Gilles réentraîné (nasales) en premier, puis Tom (posé), quand leurs fichiers sont installés
@@ -122,13 +130,21 @@ class Lecteur : Form {
             if(audioOuvert) {FermerAudio();statut.Text="Texte modifié. Cliquez sur ▶ Lire pour recommencer.";}
         };
         voix.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Voix choisie : "+voix.Text+". Appliquée à la prochaine lecture.";};
-        vitesse.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Vitesse modifiée. Appliquée à la prochaine lecture.";};
+        vitesse.SelectedIndexChanged+=delegate {VitesseChoisie();};
+        relance.Interval=700; relance.Tick+=delegate {relance.Stop();RelancerAVitesse();};
+        KeyPreview=true;
+        KeyDown+=delegate(object s,KeyEventArgs e) {
+            if(!e.Control)return;
+            if(e.KeyCode==Keys.Add||e.KeyCode==Keys.Oemplus) {ChangerVitesse(1);e.Handled=true;e.SuppressKeyPress=true;}
+            else if(e.KeyCode==Keys.Subtract||e.KeyCode==Keys.OemMinus) {ChangerVitesse(-1);e.Handled=true;e.SuppressKeyPress=true;}
+        };
         AllowDrop=true;
         DragEnter+=delegate(object s,DragEventArgs e) {if(e.Data.GetDataPresent(DataFormats.FileDrop))e.Effect=DragDropEffects.Copy;};
         DragDrop+=delegate(object s,DragEventArgs e) {try {var files=(string[])e.Data.GetData(DataFormats.FileDrop);if(files.Length>0)Importer(files[0]);}catch(Exception error){MessageBox.Show(error.Message,"Piper");}};
         Directory.CreateDirectory(temp); timer.Interval=50; timer.Tick+=Poll; timer.Start();
         FormClosing+=delegate { Arreter(); SauverSession(true); timer.Stop(); try {Directory.Delete(temp,true);} catch {} };
         ChargerSession();
+        ChargerVitesse();
         Shown+=delegate { if(PositionValide()) {texte.Select(positionLecture,0);texte.ScrollToCaret();} };
     }
     // ---- Reperes : pages et table des matieres (version 1.6) ----
@@ -350,6 +366,41 @@ class Lecteur : Form {
             statut.Text=PositionValide()?"Texte et position de lecture retrouvés. Cliquez sur ⟲ Reprendre où j'étais.":"Texte précédent retrouvé.";
         } catch(Exception) {} finally {chargement=false;}
     }
+    // ---- Vitesse (version 1.12) ----
+    static readonly string[] Vitesses={"0,60 ×","0,70 ×","0,75 ×","0,80 ×","0,85 ×","0,90 ×","0,95 ×","1,00 ×","1,05 ×","1,10 ×","1,15 ×","1,20 ×","1,25 ×","1,30 ×","1,40 ×","1,50 ×","1,60 ×","1,75 ×","2,00 ×"};
+    Timer relance=new Timer();
+    bool chargementVitesse, vitesseEnAttente;
+    double VitesseChoisieValeur() {
+        string v=((string)vitesse.SelectedItem??"1,00 ×").Replace(" ×","").Replace(',','.');
+        return double.Parse(v,System.Globalization.CultureInfo.InvariantCulture);
+    }
+    void ChangerVitesse(int sens) {
+        int i=vitesse.SelectedIndex+sens;
+        if(i>=0 && i<vitesse.Items.Count) vitesse.SelectedIndex=i;
+    }
+    void VitesseChoisie() {
+        if(chargementVitesse)return;
+        try {Directory.CreateDirectory(DossierSession);EcrireSur(Path.Combine(DossierSession,"vitesse.txt"),(string)vitesse.SelectedItem);} catch(Exception) {}
+        if(lectureProgressive && suspendu) {vitesseEnAttente=true;statut.Text="Vitesse "+vitesse.Text+" : appliquée quand vous cliquerez sur ▶ Continuer.";}
+        else if(lectureProgressive && travail!=null || lectureProgressive && audioOuvert) {
+            statut.Text="Vitesse "+vitesse.Text+" : la lecture reprend à la phrase en cours…";
+            relance.Stop();relance.Start();   // attendre que l'on ait fini de cliquer
+        } else statut.Text="Vitesse "+vitesse.Text+". Appliquée à la prochaine lecture.";
+    }
+    void RelancerAVitesse() {
+        if(!lectureProgressive)return;
+        int depart=phraseCourante>=0 && PositionValide()?positionLecture:debutLecture;
+        if(depart<0 || depart>=texte.TextLength)return;
+        Demarrer(false,null,depart);
+    }
+    void ChargerVitesse() {
+        try {
+            string f=Path.Combine(DossierSession,"vitesse.txt");
+            if(!File.Exists(f))return;
+            int i=Array.IndexOf(Vitesses,File.ReadAllText(f).Trim());
+            if(i>=0) {chargementVitesse=true;vitesse.SelectedIndex=i;}
+        } catch(Exception) {} finally {chargementVitesse=false;}
+    }
     void Reprendre() {
         if(travail!=null || audioOuvert || lectureProgressive) {statut.Text="Arrêtez la lecture en cours avant de reprendre.";return;}
         if(!PositionValide()) {statut.Text="Aucune position de lecture enregistrée pour ce texte.";return;}
@@ -437,7 +488,7 @@ class Lecteur : Form {
         if(IsDisposed || texte.IsDisposed)return;
         int position=texte.SelectionStart;int selection=texte.SelectionLength;
         Surligner(-1,0);texte.Select(position,selection);
-        minuteMots=null;minutePhrases=null;motCourant=-1;phraseCourante=-1;
+        minuteMots=null;minutePhrases=null;motCourant=-1;phraseCourante=-1;vitesseEnAttente=false;
         if(lectureProgressive)SauverSession(true);
         lectureProgressive=false;
         if(travail!=null) { if(!travail.HasExited) {
@@ -476,7 +527,7 @@ class Lecteur : Form {
         if(sauver && chemin==null) using(var d=new SaveFileDialog {Filter="Audio WAV|*.wav",FileName="lecture.wav",DefaultExt="wav"}) {if(d.ShowDialog()!=DialogResult.OK)return; chemin=d.FileName;}
         Arreter(); debutLecture=depart; importation=false; destination=chemin; erreur="";
         empreinteLecture=EmpreinteActuelle();
-        var donnees=new Dictionary<string,object>(); donnees["text"]=texte.Text.Substring(depart); donnees["speed"]=double.Parse((string)vitesse.SelectedItem,System.Globalization.CultureInfo.InvariantCulture);
+        var donnees=new Dictionary<string,object>(); donnees["text"]=texte.Text.Substring(depart); donnees["speed"]=VitesseChoisieValeur();
         donnees["voice"]=fichiersVoix[Math.Max(0,voix.SelectedIndex)];
         File.WriteAllText(Path.Combine(temp,"request.json"),new JavaScriptSerializer {MaxJsonLength=int.MaxValue}.Serialize(donnees),new System.Text.UTF8Encoding(false));
         var info=new ProcessStartInfo(Path.Combine(racine,"runtime","Scripts","python.exe"));
@@ -487,7 +538,7 @@ class Lecteur : Form {
         info.EnvironmentVariables["TEMP"]=temp;info.EnvironmentVariables["TMP"]=temp;
         if(!LancerTravail(info)){lectureProgressive=false;return;}
         debut=DateTime.Now; texte.ReadOnly=true;
-        vitesse.Enabled=false;voix.Enabled=false;
+        voix.Enabled=false;
         statut.Text="Préparation de la voix… Arrêter permet d’annuler.";
     }
     /// 1.9.1 : lance python sans laisser un processus non demarre (cause de « Aucun processus n'est associe a cet objet »).
