@@ -1,0 +1,16 @@
+name: diag-sources
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: |
+          python legal/package_sources.py > diag.txt 2>&1 || echo "CODE $?" >> diag.txt
+          tail -60 diag.txt > diag-fin.txt
+          git config user.name ci; git config user.email ci@example.invalid
+          git add diag-fin.txt; git commit -m "diag [skip ci]"; git push
