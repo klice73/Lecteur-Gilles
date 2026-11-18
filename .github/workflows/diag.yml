@@ -10,12 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          python3 - > diag-fin.txt 2>&1 <<'PY'
-          import json,urllib.request
-          for e in json.load(open('legal/source-manifest.json')):
-              try:
-                  r=urllib.request.urlopen(urllib.request.Request(e['url'],headers={'User-Agent':'Lecteur-Gilles'}),timeout=60); print(r.status,e['url'])
-              except Exception as x: print('ERREUR',x,e['url'])
-          PY
+          for u in https://api.github.com/repos/microsoft/onnxruntime "https://api.github.com/repos/microsoft/onnxruntime/tags?per_page=15" https://api.github.com/repos/microsoft/onnxruntime/git/refs/tags/v1.28.2; do echo "== $u"; curl -s -H "Authorization: Bearer ${{ github.token }}" "$u" | head -c 1500; echo; done > diag-fin.txt 2>&1
+          curl -sIL https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.28.2.tar.gz | grep -iE "^HTTP|^location" >> diag-fin.txt
           git config user.name ci; git config user.email ci@example.invalid
           git add diag-fin.txt; git commit -m "diag 2 [skip ci]"; git push
