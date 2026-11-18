@@ -19,17 +19,21 @@ jobs:
           git clone -q --recurse-submodules https://github.com/ServeurpersoCom/qwentts.cpp /tmp/q
           cd /tmp/q && git checkout -q 5916bf7 && git submodule update -q --init --recursive
           mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 > /tmp/c.log 2>&1
+          ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1
+          export LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LIBRARY_PATH
+          LF="-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,/usr/local/cuda/lib64/stubs -DCMAKE_SHARED_LINKER_FLAGS=-L/usr/local/cuda/lib64/stubs"
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 $LF > /tmp/c.log 2>&1
           echo "cmake: $?" >> /tmp/r.txt
           if grep -qi "cmake.*or higher is required" /tmp/c.log; then
             pip3 install -q cmake && hash -r && cmake --version | head -1 >> /tmp/r.txt
-            rm -rf /tmp/q/build/* && cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 > /tmp/c.log 2>&1
+            rm -rf /tmp/q/build/* && cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 $LF > /tmp/c.log 2>&1
             echo "cmake (pip): $?" >> /tmp/r.txt
           fi
           cmake --build . -j 4 > /tmp/b.log 2>&1
           echo "build: $?" >> /tmp/r.txt
-          ls -la qwen-tts bin/qwen-tts 2>&1 >> /tmp/r.txt
-          (ldd qwen-tts bin/qwen-tts 2>&1 | grep -iE "cuda|cublas" ) >> /tmp/r.txt
+          ls -la qwen-tts >> /tmp/r.txt 2>&1
+          ./qwen-tts --help > /tmp/h.txt 2>&1; echo "lancement sans GPU: $?" >> /tmp/r.txt; head -5 /tmp/h.txt >> /tmp/r.txt
+          (ldd qwen-tts libggml-cuda.so* 2>&1 | grep -iE "cuda|cublas" ) >> /tmp/r.txt
           echo "--- cmake log (fin)" >> /tmp/r.txt; tail -40 /tmp/c.log >> /tmp/r.txt
           echo "--- build log (erreurs)" >> /tmp/r.txt; grep -iE "error|erreur" /tmp/b.log | head -40 >> /tmp/r.txt
           echo "--- build log (fin)" >> /tmp/r.txt; tail -20 /tmp/b.log >> /tmp/r.txt
