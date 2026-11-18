@@ -1,16 +1,15 @@
 Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
 2 chapitres dans « livre-essai »
-FAIT 001 - Premiere partie.mp3 : 2 passages, 0.2 min d audio en 1.0 min (x0.23 temps reel), seance 0.0 h
-FAIT 002 - Deuxieme partie.mp3 : 2 passages, 0.1 min d audio en 0.7 min (x0.18 temps reel), seance 0.0 h
+FAIT 001 - Premiere partie.mp3 : 2 passages, 0.4 min d audio en 1.6 min (x0.23 temps reel), seance 0.0 h
+FAIT 002 - Deuxieme partie.mp3 : 2 passages, 0.1 min d audio en 0.9 min (x0.14 temps reel), seance 0.0 h
 BILAN : 2 chapitres sur 2
-total 196
-drwxr-xr-x  2 runner runner   4096 Nov 18 14:52 .
-drwxrwxrwt 14 root   root     4096 Nov 18 14:51 ..
--rw-r--r--  1 runner runner 107664 Nov 18 14:52 001 - Premiere partie.mp3
--rw-r--r--  1 runner runner  64080 Nov 18 14:52 002 - Deuxieme partie.mp3
--rw-r--r--  1 runner runner     28 Nov 18 14:52 etat.json
--rw-r--r--  1 runner runner   9492 Nov 18 14:52 journal-moteur.txt
-[Sample] step=1 c0=466 u=0.7741796374 subseq=16
+total 256
+drwxr-xr-x  2 runner runner   4096 Nov 18 15:42 .
+drwxrwxrwt 14 root   root     4096 Nov 18 15:40 ..
+-rw-r--r--  1 runner runner 173520 Nov 18 15:42 001 - Premiere partie.mp3
+-rw-r--r--  1 runner runner  59088 Nov 18 15:42 002 - Deuxieme partie.mp3
+-rw-r--r--  1 runner runner     28 Nov 18 15:42 etat.json
+-rw-r--r--  1 runner runner  10019 Nov 18 15:42 journal-moteur.txt
 [Pipeline] Generated 8 frames (slot 0)
 [Pipeline] Generated 16 frames (slot 0)
 [Pipeline] Generated 24 frames (slot 0)
@@ -19,16 +18,17 @@ drwxrwxrwt 14 root   root     4096 Nov 18 14:51 ..
 [Pipeline] Generated 48 frames (slot 0)
 [Pipeline] Generated 56 frames (slot 0)
 [Pipeline] Generated 64 frames (slot 0)
-[Pipeline] EOS at step 71, stopping (slot 0)
-[Pipeline] Generation done : 71 frames
-[Perf] PromptBuild 13.4 ms
-[Perf] Prefill 2584.8 ms (T_ctx prefill)
-[Perf] TTFA 2659.7 ms (first frame codes)
-[Perf] TalkerDecode 3216.9 ms (71 frames, 45.31 ms/frame)
-[Perf] CodePredictor 4573.3 ms (64.41 ms/frame)
-[Perf] HostCompose 3.0 ms (c0 sample + next emb)
-[Perf] CodecDecode 6057.7 ms
-[Perf] Total 16450.3 ms (71 frames, 109.76 ms/frame AR, audio 5.68 s, RTF 2.896)
+[Pipeline] Generated 72 frames (slot 0)
+[Pipeline] EOS at step 75, stopping (slot 0)
+[Pipeline] Generation done : 75 frames
+[Perf] PromptBuild 12.9 ms
+[Perf] Prefill 2478.0 ms (T_ctx prefill)
+[Perf] TTFA 2564.5 ms (first frame codes)
+[Perf] TalkerDecode 3656.4 ms (75 frames, 48.75 ms/frame)
+[Perf] CodePredictor 5305.3 ms (70.74 ms/frame)
+[Perf] HostCompose 2.9 ms (c0 sample + next emb)
+[Perf] CodecDecode 8779.0 ms
+[Perf] Total 20235.6 ms (75 frames, 119.53 ms/frame AR, audio 6.00 s, RTF 3.373)
 [Pipeline] Streamed 2 lines to <stdout>
 Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
 2 chapitres dans « livre-essai »
