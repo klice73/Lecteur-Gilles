@@ -55,13 +55,14 @@ class Lecteur : Form {
         statut.Text="Lecture en cours. Ⅱ Pause suspend la voix ; ▶ Continuer la reprend.";
     }
     void Continuer() {
-        if(suspendu && audioOuvert && vitesseEnAttente) {vitesseEnAttente=false;suspendu=false;lire.Text="▶ Lire tout";pause.Enabled=true;RelancerAVitesse();return;}
+        if(suspendu && audioOuvert && vitesseEnAttente && lectureProgressive) {vitesseEnAttente=false;suspendu=false;lire.Text="▶ Lire tout";pause.Enabled=true;RelancerAVitesse();return;}
         if(suspendu && audioOuvert) {Audio("resume "+alias);suspendu=false;lire.Text="▶ Lire tout";pause.Enabled=true;statut.Text="Lecture reprise.";}
         else if(audioOuvert && Audio("status "+alias+" mode")=="playing")return;
         else if(travail==null)Demarrer(false);
     }
     void Pauser() {
         if(!audioOuvert || suspendu)return;
+        if(relance.Enabled) {relance.Stop();vitesseEnAttente=true;}
         Audio("pause "+alias);suspendu=true;lire.Text="▶ Continuer";pause.Enabled=false;statut.Text="En pause. Cliquez sur ▶ Continuer pour reprendre au même endroit.";
         SauverSession(true);
     }
@@ -131,10 +132,10 @@ class Lecteur : Form {
         };
         voix.SelectedIndexChanged+=delegate {if(audioOuvert)FermerAudio();statut.Text="Voix choisie : "+voix.Text+". Appliquée à la prochaine lecture.";};
         vitesse.SelectedIndexChanged+=delegate {VitesseChoisie();};
-        relance.Interval=700; relance.Tick+=delegate {relance.Stop();RelancerAVitesse();};
+        relance.Interval=700; relance.Tick+=delegate {relance.Stop();if(suspendu)return;try{RelancerAVitesse();}catch(Exception e){Arreter();statut.Text="Erreur de lecture : "+e.Message;}};
         KeyPreview=true;
         KeyDown+=delegate(object s,KeyEventArgs e) {
-            if(!e.Control)return;
+            if(!e.Control || e.Alt)return;
             if(e.KeyCode==Keys.Add||e.KeyCode==Keys.Oemplus) {ChangerVitesse(1);e.Handled=true;e.SuppressKeyPress=true;}
             else if(e.KeyCode==Keys.Subtract||e.KeyCode==Keys.OemMinus) {ChangerVitesse(-1);e.Handled=true;e.SuppressKeyPress=true;}
         };
@@ -377,6 +378,7 @@ class Lecteur : Form {
     void ChangerVitesse(int sens) {
         int i=vitesse.SelectedIndex+sens;
         if(i>=0 && i<vitesse.Items.Count) vitesse.SelectedIndex=i;
+        else statut.Text=sens<0?"Vitesse minimale : 0,60 ×.":"Vitesse maximale : 2,00 ×.";
     }
     void VitesseChoisie() {
         if(chargementVitesse)return;
@@ -389,7 +391,8 @@ class Lecteur : Form {
     }
     void RelancerAVitesse() {
         if(!lectureProgressive)return;
-        int depart=phraseCourante>=0 && PositionValide()?positionLecture:debutLecture;
+        // position notee pendant CETTE lecture seulement (phraseCourante est remis a -1 a chaque depart)
+        int depart=phraseCourante>=0 && PositionValide() && positionLecture>=debutLecture?positionLecture:debutLecture;
         if(depart<0 || depart>=texte.TextLength)return;
         Demarrer(false,null,depart);
     }
@@ -485,6 +488,7 @@ class Lecteur : Form {
         if(nouvellePhrase) {string ou=OuSuisJe(pd);if(ou.Length>0)statut.Text="Lecture : "+ou+".";}
     }
     void Arreter() {
+        relance.Stop();
         if(IsDisposed || texte.IsDisposed)return;
         int position=texte.SelectionStart;int selection=texte.SelectionLength;
         Surligner(-1,0);texte.Select(position,selection);

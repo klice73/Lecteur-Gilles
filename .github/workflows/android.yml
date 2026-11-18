@@ -175,6 +175,17 @@ jobs:
           $j=Get-Content windows\flux-gm\part-000001.json -Raw | ConvertFrom-Json
           "Gilles nouveau - mots: $($j.mots.Count)  alignees exactement: $($j.exactes)  estimees: $($j.estimees)"
           if($j.mots.Count -lt 15 -or $j.exactes -lt 1){throw "minutage Gilles nouveau incomplet"}
+      - name: Vitesses extremes (0,60 et 2,00) avec Gilles nouveau
+        shell: pwsh
+        run: |
+          foreach($v in @(0.6,2.0)){
+            $req=@{text="Bonjour. Un bon vin blanc, du pain et du jambon.";speed=$v;voice="fr_FR-gilles-medium"} | ConvertTo-Json
+            [IO.File]::WriteAllText("$PWD\windows\req-v.json",$req,(New-Object Text.UTF8Encoding $false))
+            windows\runtime\Scripts\python.exe windows\lecteur.py --synthesize windows\req-v.json "windows\vitesse-$v.wav"
+            if($LASTEXITCODE -ne 0){throw "synthese a la vitesse $v en echec"}
+            $n=(Get-Item "windows\vitesse-$v.wav").Length; "vitesse $v : $n octets"
+          }
+          if((Get-Item windows\vitesse-0.6.wav).Length -le 2*(Get-Item windows\vitesse-2.wav).Length){throw "la vitesse 0,60 devrait durer bien plus que 2,00"}
       - name: Minutage mot à mot avec la voix Tom (posé)
         shell: pwsh
         run: |

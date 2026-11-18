@@ -4,7 +4,7 @@ Nouveautes de la 1.12 : vitesse de lecture
   - 19 vitesses, de 0,60 x a 2,00 x, par pas de 0,05 autour de la vitesse normale.
   - Boutons « − » et « + » a cote de la liste, et raccourcis clavier Ctrl + − et Ctrl + +.
   - La vitesse change PENDANT la lecture : la lecture reprend a la phrase en cours, a la nouvelle vitesse
-    (environ une seconde de preparation). En pause, la nouvelle vitesse s'applique quand vous cliquez sur Continuer.
+    (quelques secondes de preparation). En pause, la nouvelle vitesse s'applique quand vous cliquez sur Continuer.
   - La vitesse choisie est retenue a la prochaine ouverture du lecteur.
 
 Nouveautes de la 1.11
@@ -99,7 +99,7 @@ Installation (environ 1 minute)
   4. Relancer le lecteur avec le raccourci du bureau (inchange).
 
 Ou est garde le texte ?
-  Dans le sous-dossier « session » du lecteur (texte.txt et position.txt), sur votre
+  Dans le sous-dossier « session » du lecteur (texte.txt, position.txt, reperes.json et vitesse.txt), sur votre
   ordinateur seulement. Rien n'est envoye sur Internet. Supprimer ce dossier efface
   la memoire de lecture.
 
