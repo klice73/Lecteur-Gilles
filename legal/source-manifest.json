@@ -21,13 +21,15 @@
     "name": "onnxruntime-android-1.28.2",
     "url": "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.28.2.tar.gz",
     "sha256": "a5003dfd85d66a4d45bd2757c7f813f9e835142e9a936ac04877c788d6afe938",
-    "file": "onnxruntime-android-1.28.2.tar.gz"
+    "file": "onnxruntime-android-1.28.2.tar.gz",
+    "facultatif": "licence MIT (pas d'obligation de fournir la source) ; depot github.com/microsoft/onnxruntime introuvable (404) depuis le 17 novembre 2026"
   },
   {
     "name": "onnxruntime-windows-1.31.0",
     "url": "https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.31.0.tar.gz",
     "sha256": "a7e84230b5d509e48fbd6b73c2453a56345ccb22da34a46dac1f0cb4a2d6507b",
-    "file": "onnxruntime-windows-1.31.0.tar.gz"
+    "file": "onnxruntime-windows-1.31.0.tar.gz",
+    "facultatif": "licence MIT (pas d'obligation de fournir la source) ; depot github.com/microsoft/onnxruntime introuvable (404) depuis le 17 novembre 2026"
   },
   {
     "name": "sherpa-dependency-espeak-ng-for-piper",
