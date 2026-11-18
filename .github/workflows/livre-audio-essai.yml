@@ -1,0 +1,51 @@
+name: livre-audio-essai
+on:
+  push:
+    branches: [livre-audio]
+    paths: ['entrainement/livre-audio/**', '.github/workflows/livre-audio-essai.yml']
+permissions:
+  contents: write
+jobs:
+  essai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Moteur qwentts.cpp (meme revision que le lecteur Windows, CPU)
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y ffmpeg cmake > /dev/null
+          git clone -q --recurse-submodules https://github.com/ServeurpersoCom/qwentts.cpp /tmp/qwentts
+          cd /tmp/qwentts && git checkout -q 5916bf7 && git submodule update -q --init --recursive
+          mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release > /dev/null && cmake --build . -j 4 > /dev/null
+          ls /tmp/qwentts/build | head
+      - name: Voix d'essai publique (0.6B base, clone de l'exemple freeman)
+        run: |
+          pip -q install huggingface_hub numpy
+          python -c "from huggingface_hub import hf_hub_download as d;[d('Serveurperso/Qwen3-TTS-GGUF',f,local_dir='/tmp/voix') for f in ['qwen-tokenizer-12hz-Q8_0.gguf','qwen-talker-0.6b-base-Q8_0.gguf']]"
+          cd /tmp/voix && cp /tmp/qwentts/examples/freeman.wav /tmp/qwentts/examples/freeman.txt .
+          /tmp/qwentts/build/qwen-codec --model qwen-tokenizer-12hz-Q8_0.gguf --talker qwen-talker-0.6b-base-Q8_0.gguf -i freeman.wav 2>&1 | tail -3
+          ls -la /tmp/voix
+          mv freeman.txt reference.txt; mv freeman.spk reference.spk; mv freeman.rvq reference.rvq
+          mv qwen-talker-0.6b-base-Q8_0.gguf Hubert-essai.gguf; mv qwen-tokenizer-12hz-Q8_0.gguf codec-Q8.gguf
+      - name: Livre audio d'essai (2 passages par chapitre, 3 chapitres)
+        run: |
+          mkdir -p resultats
+          python - <<'PY'
+          import zipfile, shutil
+          src='windows/tests/document.docx'; shutil.copy(src,'/tmp/livre-essai.docx')
+          PY
+          python entrainement/livre-audio/moteur_livre.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix \
+            --livre /tmp/livre-essai.docx --sortie /tmp/sortie --documents windows/documents.py --premiers 2 --heures 1 2>&1 | tee resultats/essai.txt
+          ls -la /tmp/sortie | tee -a resultats/essai.txt
+          tail -20 /tmp/sortie/journal-moteur.txt >> resultats/essai.txt || true
+          # reprise : la 2e execution ne doit rien refaire
+          python entrainement/livre-audio/moteur_livre.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix \
+            --livre /tmp/livre-essai.docx --sortie /tmp/sortie2 --reprise /tmp/sortie --documents windows/documents.py --premiers 2 2>&1 | tee -a resultats/essai.txt
+          cp "$(ls /tmp/sortie/*.mp3 | head -1)" resultats/premier-chapitre.mp3 || true
+      - name: Rapporter
+        if: always()
+        run: |
+          git config user.name ci; git config user.email ci@example.invalid
+          git add -f resultats; git commit -m "essai livre audio [skip ci]" && git push || true
