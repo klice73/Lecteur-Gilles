@@ -12,8 +12,8 @@ Fabrique **un fichier MP3 par chapitre**, à copier sur le téléphone. Tout se 
 fermer l'onglet. Une séance s'arrête d'elle-même après environ 10 heures ; la suivante reprend où elle s'était arrêtée.
 
 **Entrées à ajouter (panneau de droite, Add Input → Your Work → Datasets) :**
-1. votre jeu de données **privé** « hubert-voix » : le contenu du dossier `hubert-local` (au minimum `codec-Q8.gguf`,
-   `Hubert-candidat-Q8.gguf` ou `Hubert-adapte-Q8.gguf`, `reference.spk`, `reference.rvq`, `reference.txt`, `config.json`) ;
+1. votre jeu de données **privé** « hubert-voix » : `codec-Q8.gguf`, **une seule** voix Hubert (la plus récente),
+   `reference.spk`, `reference.rvq`, `reference.txt`, `config.json` (tous tirés du dossier `hubert-local`) ;
 2. votre jeu de données **privé** « livre » : le livre (`.docx`, `.epub`, `.pdf` ou `.txt`) et, si vous voulez,
    votre `prononciations.txt`.
 
@@ -39,7 +39,12 @@ mkdir -p /kaggle/tmp && cd /kaggle/tmp
 [ -d qwentts ] || git clone -q --recurse-submodules https://github.com/ServeurpersoCom/qwentts.cpp qwentts
 cd qwentts && git checkout -q {REV} && git submodule update -q --init --recursive
 mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 > /tmp/cmake.log 2>&1 || (tail -30 /tmp/cmake.log; exit 1)
+LF=""
+if ! ldconfig -p | grep -q 'libcuda.so.1'; then
+  S=/usr/local/cuda/lib64/stubs; ln -sf $S/libcuda.so $S/libcuda.so.1; export LIBRARY_PATH=$S:$LIBRARY_PATH
+  LF="-DCMAKE_EXE_LINKER_FLAGS=-Wl,-rpath-link,$S -DCMAKE_SHARED_LINKER_FLAGS=-L$S"
+fi
+cmake .. -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 $LF > /tmp/cmake.log 2>&1 || (tail -30 /tmp/cmake.log; exit 1)
 cmake --build . -j 4 > /tmp/build.log 2>&1 || (tail -40 /tmp/build.log; exit 1)
 ls -la qwen-tts
 curl -sL -o /kaggle/tmp/documents.py https://raw.githubusercontent.com/klice73/Lecteur-Gilles/main/windows/documents.py
