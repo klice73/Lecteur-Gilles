@@ -1,0 +1,89 @@
+cmake version 3.22.1
+cmake: 0
+build: 0
+-rwxr-xr-x 1 root root 428808 Nov 18 15:38 qwen-tts
+lancement sans GPU: 127
+./qwen-tts: error while loading shared libraries: libcuda.so.1: cannot open shared object file: No such file or directory
+	libggml-cuda.so.0 => /tmp/q/build/libggml-cuda.so.0 (0x0000772d39bab000)
+	libcudart.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12 (0x0000772d39800000)
+	libcublas.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so.12 (0x0000772d32c00000)
+	libcuda.so.1 => not found
+	libcublasLt.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so.12 (0x0000772d06600000)
+libggml-cuda.so:
+	libcudart.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12 (0x0000728b19c00000)
+	libcublas.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so.12 (0x0000728b13000000)
+	libcuda.so.1 => not found
+	libcublasLt.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so.12 (0x0000728ae6600000)
+libggml-cuda.so.0:
+	libcudart.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12 (0x00007c02ae600000)
+	libcublas.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so.12 (0x00007c02a7a00000)
+	libcuda.so.1 => not found
+	libcublasLt.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so.12 (0x00007c027b000000)
+libggml-cuda.so.0.27.0:
+	libcudart.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcudart.so.12 (0x00007b2929a00000)
+	libcublas.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublas.so.12 (0x00007b2922e00000)
+	libcuda.so.1 => not found
+	libcublasLt.so.12 => /usr/local/cuda/targets/x86_64-linux/lib/libcublasLt.so.12 (0x00007b28f6400000)
+--- cmake log (fin)
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Looking for pthread.h
+-- Looking for pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- The ASM compiler identification is GNU
+-- Found assembler: /usr/bin/cc
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Found OpenMP_C: -fopenmp (found version "4.5") 
+-- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+-- Found OpenMP: TRUE (found version "4.5")  
+-- Including CPU backend
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -march=native 
+-- Found CUDAToolkit: /usr/local/cuda/include (found version "12.4.131") 
+-- CUDA Toolkit found
+-- The CUDA compiler identification is NVIDIA 12.4.131
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Using CMAKE_CUDA_ARCHITECTURES=75 CMAKE_CUDA_ARCHITECTURES_NATIVE=
+-- FlashAttention K-V type combinations: f16-f16;q4_0-q4_0;q8_0-q8_0;bf16-bf16
+-- Found NCCL: /usr/lib/x86_64-linux-gnu/libnccl.so  
+-- CUDA host compiler is GNU 11.4.0
+-- Including CUDA backend
+-- ggml version: 0.27.0
+-- ggml commit:  cc5df49a
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /tmp/q/build
+--- build log (erreurs)
+--- build log (fin)
+[ 94%] Building CXX object CMakeFiles/qwen-core.dir/src/qwen.cpp.o
+[ 94%] Building CXX object CMakeFiles/qwen-core.dir/src/pipeline-tts.cpp.o
+[ 94%] Building CXX object CMakeFiles/quantize.dir/tools/quantize.cpp.o
+[ 94%] Building CXX object CMakeFiles/qwen-core.dir/src/pipeline-codec.cpp.o
+[ 95%] Linking CXX executable quantize
+[ 95%] Built target quantize
+[ 96%] Linking CXX static library libqwen-core.a
+[ 96%] Built target qwen-core
+[ 96%] Building CXX object CMakeFiles/qwen-codec.dir/tools/qwen-codec.cpp.o
+[ 96%] Building CXX object CMakeFiles/qwen-tts.dir/tools/qwen-tts.cpp.o
+[ 96%] Building CXX object CMakeFiles/tts-server.dir/tools/tts-server.cpp.o
+[ 96%] Building C object CMakeFiles/test-abi-c.dir/tests/abi-c.c.o
+[ 97%] Linking CXX executable test-abi-c
+[ 97%] Built target test-abi-c
+[ 98%] Linking CXX executable qwen-tts
+[ 98%] Built target qwen-tts
+[ 99%] Linking CXX executable qwen-codec
+[ 99%] Built target qwen-codec
+[100%] Linking CXX executable tts-server
+[100%] Built target tts-server
