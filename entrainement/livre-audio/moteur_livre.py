@@ -109,7 +109,7 @@ def nom_fichier(i, titre):
     s = re.sub(r'\s+', ' ', re.sub(r'[^A-Za-z0-9 _-]+', ' ', s)).strip()[:60] or 'chapitre'
     return '%03d - %s' % (i, s)
 
-def synthese(qwen, voix, lignes, device, journal):
+def synthese_morceaux(qwen, voix, lignes, device, journal):
     cmd = [qwen, '--model', voix['model'], '--codec', voix['codec'], '--lang', 'French',
            '--ref-spk', voix['spk'], '--ref-rvq', voix['rvq'], '--ref-text', voix['ref'],
            '--seed', '42', '--codec-chunk-dur', str(voix.get('chunk', 4)), '--max-new', '2048',
@@ -119,10 +119,12 @@ def synthese(qwen, voix, lignes, device, journal):
     with open(journal, 'ab') as log:
         p = subprocess.run(cmd, input=entree, stdout=subprocess.PIPE, stderr=log)
     if p.returncode != 0: raise RuntimeError('qwen-tts code %d (voir %s)' % (p.returncode, journal))
-    morceaux = [m for m in p.stdout.split(ENTETE) if m]
-    pcm = b''.join(m[44 - len(ENTETE):] for m in morceaux)  # retirer le reste de l'en-tete de 44 octets
+    morceaux = [m[44 - len(ENTETE):] for m in p.stdout.split(ENTETE) if m]  # retirer le reste de l'en-tete de 44 octets
     if len(morceaux) != len(lignes): raise RuntimeError('%d lignes envoyees, %d sons recus' % (len(lignes), len(morceaux)))
-    return pcm
+    return morceaux
+
+def synthese(qwen, voix, lignes, device, journal):
+    return b''.join(synthese_morceaux(qwen, voix, lignes, device, journal))
 
 def gain(pcm):
     import numpy as np
@@ -138,6 +140,22 @@ def mp3(pcm, cible, titre, livre, num):
                     '-metadata', 'artist=Hubert (voix de synthese)', '-metadata', 'track=%d' % num, tmp], input=pcm, check=True)
     os.replace(tmp, cible)
 
+def trouver_voix(dossier, modele=''):
+    d = Path(dossier)
+    cfg = {}
+    try: cfg = json.loads((d / 'config.json').read_text(encoding='utf-8'))
+    except Exception: pass
+    def trouve(cle, motifs):
+        if cfg.get(cle) and (d / cfg[cle]).is_file(): return str(d / cfg[cle])
+        for m in motifs:
+            g = sorted(d.glob(m))
+            if g: return str(g[0])
+        raise SystemExit('Fichier de voix introuvable : ' + cle)
+    return {'model': str(d / modele) if modele else trouve('model', ['Hubert-candidat*.gguf', 'Hubert*.gguf', '*talker*.gguf']),
+            'codec': trouve('codec', ['codec*.gguf', '*tokenizer*.gguf']),
+            'spk': trouve('spk', ['*.spk']), 'rvq': trouve('rvq', ['*.rvq']), 'ref': trouve('reference', ['reference.txt', '*.txt']),
+            'chunk': cfg.get('codec_chunk_seconds', 4)}
+
 def main():
     a = argparse.ArgumentParser()
     a.add_argument('--qwen', required=True); a.add_argument('--dossier-voix', required=True)
@@ -151,20 +169,7 @@ def main():
     o = a.parse_args()
     t0 = time.time(); budget = o.heures * 3600
     k, n = (int(x) for x in o.tranche.split('/'))
-    d = Path(o.dossier_voix)
-    cfg = {}
-    try: cfg = json.loads((d / 'config.json').read_text(encoding='utf-8'))
-    except Exception: pass
-    def trouve(cle, motifs):
-        if cfg.get(cle) and (d / cfg[cle]).is_file(): return str(d / cfg[cle])
-        for m in motifs:
-            g = sorted(d.glob(m))
-            if g: return str(g[0])
-        raise SystemExit('Fichier de voix introuvable : ' + cle)
-    voix = {'model': str(d / o.modele) if o.modele else trouve('model', ['Hubert-candidat*.gguf', 'Hubert*.gguf', '*talker*.gguf']),
-            'codec': trouve('codec', ['codec*.gguf', '*tokenizer*.gguf']),
-            'spk': trouve('spk', ['*.spk']), 'rvq': trouve('rvq', ['*.rvq']), 'ref': trouve('reference', ['reference.txt', '*.txt']),
-            'chunk': cfg.get('codec_chunk_seconds', 4)}
+    voix = trouver_voix(o.dossier_voix, o.modele)
     print('Voix :', json.dumps({kk: Path(v).name if isinstance(v, str) else v for kk, v in voix.items()}), flush=True)
     sortie = Path(o.sortie); sortie.mkdir(parents=True, exist_ok=True)
     parties = sortie / 'parties'; parties.mkdir(exist_ok=True)

@@ -49,6 +49,25 @@ jobs:
           grep -q "reprise depuis 1 dossier" /tmp/t0.txt && grep -c "DEJA FAIT" resultats/essai.txt
           test "$n" = 3
           cp "$(ls /tmp/s2/*.mp3 | head -1)" resultats/premier-chapitre.mp3
+      - name: Phrases d'entrainement (etape 1 du Hubert leger)
+        run: |
+          python - <<'PY'
+          L = ["Le vent soufflait doucement sur la plaine endormie.", "Il ouvrit la porte et regarda longtemps la mer.",
+               "Nous avons marche jusqu'au village avant la nuit.", "Les etoiles brillaient au-dessus des toits de la ville.",
+               "Elle lui tendit la lettre sans dire un seul mot.", "Le chemin montait entre les arbres couverts de neige."]
+          open('/tmp/transcript.txt', 'w').write(''.join('x/%d.wav|%s|%s|3\n' % (i, t, t) for i, t in enumerate(L)))
+          PY
+          P="python entrainement/livre-audio/moteur_phrases.py --qwen /tmp/qwentts/build/qwen-tts --dossier-voix /tmp/voix --transcript /tmp/transcript.txt --nombre 6 --bloc 3"
+          echo "== phrases" | tee -a resultats/essai.txt
+          $P --sortie /tmp/p1 --tranche 0/2 2>&1 | tee -a resultats/essai.txt
+          $P --sortie /tmp/p2 --reprise /tmp/p1 --reprise-seule
+          $P --sortie /tmp/p2 --tranche 0/2 2>&1 | tee -a resultats/essai.txt
+          $P --sortie /tmp/p2 --tranche 1/2 2>&1 | tee -a resultats/essai.txt
+          cat /tmp/p2/*metadata*.csv /tmp/p2/*rejets* 2>/dev/null | tee -a resultats/essai.txt
+          ffprobe -v error -show_entries stream=sample_rate,channels -of csv=p=0 /tmp/p2/wavs/hubert_00000.wav | tee -a resultats/essai.txt
+          n=$(cat /tmp/p2/*metadata*.csv /tmp/p2/*rejets* 2>/dev/null | cut -d'|' -f1 | sort -u | wc -l); echo "phrases traitees : $n (attendu 6)" | tee -a resultats/essai.txt
+          test "$n" = 6
+          cp /tmp/p2/wavs/hubert_00000.wav resultats/phrase-0.wav || true
       - name: Rapporter
         if: always()
         run: |
