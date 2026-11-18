@@ -1,37 +1,52 @@
+== seance 1 : coupee apres le premier bloc
 Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
-2 chapitres dans « livre-essai »
-FAIT 001 - Premiere partie.mp3 : 2 passages, 0.4 min d audio en 1.6 min (x0.23 temps reel), seance 0.0 h
-FAIT 002 - Deuxieme partie.mp3 : 2 passages, 0.1 min d audio en 0.9 min (x0.14 temps reel), seance 0.0 h
-BILAN : 2 chapitres sur 2
-total 256
-drwxr-xr-x  2 runner runner   4096 Nov 18 15:42 .
-drwxrwxrwt 14 root   root     4096 Nov 18 15:40 ..
--rw-r--r--  1 runner runner 173520 Nov 18 15:42 001 - Premiere partie.mp3
--rw-r--r--  1 runner runner  59088 Nov 18 15:42 002 - Deuxieme partie.mp3
--rw-r--r--  1 runner runner     28 Nov 18 15:42 etat.json
--rw-r--r--  1 runner runner  10019 Nov 18 15:42 journal-moteur.txt
-[Pipeline] Generated 8 frames (slot 0)
-[Pipeline] Generated 16 frames (slot 0)
-[Pipeline] Generated 24 frames (slot 0)
-[Pipeline] Generated 32 frames (slot 0)
-[Pipeline] Generated 40 frames (slot 0)
-[Pipeline] Generated 48 frames (slot 0)
-[Pipeline] Generated 56 frames (slot 0)
-[Pipeline] Generated 64 frames (slot 0)
-[Pipeline] Generated 72 frames (slot 0)
-[Pipeline] EOS at step 75, stopping (slot 0)
-[Pipeline] Generation done : 75 frames
-[Perf] PromptBuild 12.9 ms
-[Perf] Prefill 2478.0 ms (T_ctx prefill)
-[Perf] TTFA 2564.5 ms (first frame codes)
-[Perf] TalkerDecode 3656.4 ms (75 frames, 48.75 ms/frame)
-[Perf] CodePredictor 5305.3 ms (70.74 ms/frame)
-[Perf] HostCompose 2.9 ms (c0 sample + next emb)
-[Perf] CodecDecode 8779.0 ms
-[Perf] Total 20235.6 ms (75 frames, 119.53 ms/frame AR, audio 6.00 s, RTF 3.373)
-[Pipeline] Streamed 2 lines to <stdout>
+3 chapitres dans « livre-essai » ; tranche 0/2 ; reprise depuis 0 dossier(s)
+  bloc 1/3 du chapitre 1 : 0.0 min d audio en 0.5 min
+ARRET temps alloue presque ecoule (chapitre 1 en cours, deja sauvegarde) ; relancez avec la sortie en entree
+BILAN tranche 0 : 0 chapitres sur 2
+/tmp/s1:
+bilan-0.json
+etat.json
+journal-moteur-0.txt
+parties
+
+/tmp/s1/parties:
+001-000.pcm
+== seance 2 : reprise, 2 tranches en parallele
 Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
-2 chapitres dans « livre-essai »
-DEJA FAIT 001 - Premiere partie.mp3
-DEJA FAIT 002 - Deuxieme partie.mp3
-BILAN : 2 chapitres sur 2
+3 chapitres dans « livre-essai » ; tranche 0/2 ; reprise depuis 1 dossier(s)
+  bloc 2/3 du chapitre 1 : 0.1 min d audio en 1.2 min
+  bloc 3/3 du chapitre 1 : 0.1 min d audio en 1.2 min
+FAIT 001 - Debut.mp3 : 0.3 min d audio, seance 0.0 h
+  bloc 1/3 du chapitre 3 : 0.0 min d audio en 0.9 min
+  bloc 2/3 du chapitre 3 : 0.1 min d audio en 0.7 min
+  bloc 3/3 du chapitre 3 : 0.1 min d audio en 0.7 min
+FAIT 003 - Chapitre 2 Le lac.mp3 : 0.3 min d audio, seance 0.1 h
+BILAN tranche 0 : 2 chapitres sur 2
+Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
+3 chapitres dans « livre-essai » ; tranche 1/2 ; reprise depuis 1 dossier(s)
+  bloc 1/3 du chapitre 2 : 0.0 min d audio en 0.9 min
+  bloc 2/3 du chapitre 2 : 0.1 min d audio en 1.2 min
+  bloc 3/3 du chapitre 2 : 0.1 min d audio en 1.2 min
+FAIT 002 - Chapitre 1 La neige.mp3 : 0.3 min d audio, seance 0.1 h
+BILAN tranche 1 : 1 chapitres sur 1
+/tmp/s2:
+001 - Debut.mp3
+002 - Chapitre 1 La neige.mp3
+003 - Chapitre 2 Le lac.mp3
+bilan-0.json
+bilan-1.json
+etat.json
+journal-moteur-0.txt
+journal-moteur-1.txt
+parties
+
+/tmp/s2/parties:
+== seance 3 : tout deja fait ; autre livre en entree ignore
+Voix : {"model": "Hubert-essai.gguf", "codec": "codec-Q8.gguf", "spk": "reference.spk", "rvq": "reference.rvq", "ref": "reference.txt", "chunk": 4}
+3 chapitres dans « livre-essai » ; tranche 0/1 ; reprise depuis 1 dossier(s)
+DEJA FAIT 001 - Debut.mp3
+DEJA FAIT 002 - Chapitre 1 La neige.mp3
+DEJA FAIT 003 - Chapitre 2 Le lac.mp3
+BILAN tranche 0 : 3 chapitres sur 3
+MP3 seance 2 : 3 (attendu 3)
